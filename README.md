@@ -1,7 +1,11 @@
 # Generation
 
+Musical phrases generation.
+* Phrase segmentation. `./src/segment.py`
+* MIDI tokenization and prepare the dataset. `./src/preprocess.py`
+* Fine-tune GPT-2 for musical phrases generation. `./src/train.py`
 
-
+## Template 
 ## Getting started
 
 To make it easy for you to get started with GitLab, here's a list of recommended next steps.
