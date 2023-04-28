@@ -15,7 +15,7 @@ def pretty_midi_sort(pm):
     return
 
 
-def trim_midi(pm, t_start, t_end, sorted=True, meta=True, by='offset'):
+def trim_midi(pm, t_start, t_end, sorted=True, meta=True, cut_by='offset'):
     """Trim midi given the start and end time.
 
     Args:
@@ -91,7 +91,11 @@ def trim_midi(pm, t_start, t_end, sorted=True, meta=True, by='offset'):
         if prev_key_obj is not None:
             pm_slice.key_signature_changes.append(prev_key_obj)
 
+    # Note start end time in original pm
+    prev_t_st = None
+
     # Looping through all instruments
+
     for orig_inst in pm.instruments:
         inst = pretty_midi.Instrument(program=orig_inst.program,
                                       is_drum=orig_inst.is_drum,
@@ -102,10 +106,15 @@ def trim_midi(pm, t_start, t_end, sorted=True, meta=True, by='offset'):
             if note.start > t_end:
                 break
 
-            if by == 'onset':
+            if cut_by == 'onset':
                 note_end = note.end - t_start
-            elif by == 'offset':
+            elif cut_by == 'offset':
                 note_end = min(t_end - t_start, note.end - t_start)
+
+            if prev_t_st is None:
+                prev_t_st = note.start
+            elif note.start < prev_t_st:
+                prev_t_st = note.start
 
             new_note = pretty_midi.Note(velocity=note.velocity, pitch=note.pitch,
                                         start=max(0, note.start - t_start),
@@ -120,4 +129,4 @@ def trim_midi(pm, t_start, t_end, sorted=True, meta=True, by='offset'):
                 inst.control_changes.append(new_ctrl)
 
         pm_slice.instruments.append(inst)
-    return pm_slice
+    return pm_slice, prev_t_st
