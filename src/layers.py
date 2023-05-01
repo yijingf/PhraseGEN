@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import torch.nn.functional as F
+from rotary_embedding_torch import RotaryEmbedding
 
 
 class MLPBlock(nn.Module):
@@ -19,15 +20,24 @@ class MLPBlock(nn.Module):
         return self.dropout(x)
 
 
-class DecoderLayer(nn.Module):
-    def __init__(self, n_embd, n_head, n_fc=3072, max_len=1024, rel_pe=False, attn_type='global', dropout=.1):
+class AttnBlock(nn.Module):
+    def __init__(self, n_embd, n_head, n_fc=3072, max_len=1024,
+                 pe_type=None, attn_type='global', dropout=.1, block_len=128,
+                 residual=False):
 
+        self.residual = residual
+        if residual:
+            self.fc = nn.Linear(n_embd, n_embd, bias=False)
+        else:
+            self.fc = None
+
+        self.attn_type = attn_type
         if attn_type == 'local':
-            self.attn = LocalAttention()
+            self.attn = LocalAttn(block_len)
         elif attn_type == 'global':
-            self.attn = GlobalAttention(n_embd, n_head, max_len, rel_pe)
+            self.attn = GlobalAttn(n_embd, n_head, max_len, pe_type)
         elif attn_type == 'perceiver':
-            self.attn = PerceiverAttention(n_embd, n_head, max_len, rel_pe)
+            self.attn = PerceiverAttn(n_embd, n_head, max_len, pe_type)
         else:
             raise ValueError("Unknown type of attention Module")
 
@@ -38,11 +48,15 @@ class DecoderLayer(nn.Module):
         self.mlp_block = MLPBlock(n_embd, n_fc, dropout)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, q_len=128):
 
         x = self.ln_1(x)
-        attn = self.attn(x, mask)
+        attn = self.attn(x)
         x = self.resid_dropout(x + attn)
+
+        # Implement residual structure for perceiver block
+        if self.residual:
+            x = self.fc(self.ln_1(x)) + x
 
         x = self.ln_2(x)
         x = self.mlp_block(x)
@@ -50,8 +64,8 @@ class DecoderLayer(nn.Module):
         return self.dropout(x)
 
 
-class PerceiverAttention(nn.Module):
-    def __init__(self, max_len, con_len, n_embd, n_head, dropout=.1):
+class PerceiverAttn(nn.Module):
+    def __init__(self, max_len, n_embd, n_head, dropout=.1, pe_type='rotary'):
         super().__init__()
         d_head, remainder = divmod(n_embd, n_head)
         if remainder:
@@ -60,18 +74,26 @@ class PerceiverAttention(nn.Module):
         self.max_len = max_len
         self.n_embd = n_embd
         self.n_head = n_head
-        self.key = nn.Linear(n_embd, n_embd)
-        self.value = nn.Linear(n_embd, n_embd)
-        self.query = nn.Linear(n_embd, n_embd)
+        self.key = nn.Linear(n_embd, n_embd, bias=False)
+        self.value = nn.Linear(n_embd, n_embd, bias=False)
+        self.query = nn.Linear(n_embd, n_embd, bias=False)
+
+        self.pe_type = pe_type
+        self.rotary_embd = None
+        if self.pe_type == 'rotary':
+            self.rotary_embd = RotaryEmbedding(d_head)
+
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(n_embd)
 
-    def forward(self, x, block_len, mask=None):
-        # Todo: checkout generation mode
+    def forward(self, x, q_len):
+        # Todo: Masking!
         batch_size, seq_len, _ = x.shape
 
+        assert q_len < seq_len, "Error: q_len >= seq_len"
+
         x_kv = self.ln(x)
-        x_q = self.ln(x[:, -block_len:, :, ])
+        x_q = self.ln(x[:, -q_len:, :, ])
 
         k_t = self.key(x_kv).reshape(batch_size, seq_len,
                                      self.n_head, -1).permute(0, 2, 3, 1)
@@ -79,15 +101,16 @@ class PerceiverAttention(nn.Module):
         v = self.value(x_kv).reshape(batch_size, seq_len,
                                      self.n_head, -1).transpose(1, 2)
         # shape = (batch_size, n_head, seq_len, d_head)
-        q = self.query(x_q).reshape(batch_size, block_len,
+        q = self.query(x_q).reshape(batch_size, q_len,
                                     self.n_head, -1).transpose(1, 2)
-        # shape = (batch_size, n_head, block_len, d_head)
+        # shape = (batch_size, n_head, q_len, d_head)
 
         QK_t = torch.matmul(q, k_t)
         attn = QK_t / math.sqrt(q.size(-1))
 
-        # Todo: Masking
-        mask = self.mask[:, :, :seq_len, :seq_len]
+        # q_len could be changed during inference. We don't register mask at initialization.
+        mask = F.pad(torch.tril(torch.ones(q_len, q_len + 1)),
+                     (seq_len - q_len - 1, 0), value=1)
         # mask.shape = (1, 1, seq_len, seq_len)
         attn = attn.masked_fill(mask == 0, float("-inf"))
 
@@ -95,17 +118,16 @@ class PerceiverAttention(nn.Module):
 
         out = torch.matmul(attn, v)
         out = out.transpose(1, 2)
-        out = out.reshape(batch_size, block_len, -1)
+        out = out.reshape(batch_size, q_len, -1)
+        return out
 
-        return attn
 
-
-class GlobalAttention(nn.Module):
+class GlobalAttn(nn.Module):
     """Original author: Jake Tae
-    Modified: Yijing Feng (Add mask to QEr)
+    Modified: Yijing Feng (Add mask to QEr, add RoPE)
     """
 
-    def __init__(self, n_embd, n_head, max_len=1024, dropout=0.1, rel_pe=True):
+    def __init__(self, n_embd, n_head, max_len=1024, dropout=0.1, pe_type='rel'):
         super().__init__()
         d_head, remainder = divmod(n_embd, n_head)
         if remainder:
@@ -114,16 +136,24 @@ class GlobalAttention(nn.Module):
         self.max_len = max_len
         self.n_embd = n_embd
         self.n_head = n_head
-        self.key = nn.Linear(n_embd, n_embd)
-        self.value = nn.Linear(n_embd, n_embd)
-        self.query = nn.Linear(n_embd, n_embd)
+        self.key = nn.Linear(n_embd, n_embd, bias=False)
+        self.value = nn.Linear(n_embd, n_embd, bias=False)
+        self.query = nn.Linear(n_embd, n_embd, bias=False)
 
-        self.rel_pe = rel_pe
-        if self.rel_pe:
+        self.pe_type = pe_type
+        self.rotary_embd = None
+        self.Er = None
+
+        if self.pe_type == 'rel':
+            # Relative Attention
             # Er can be shared across heads
             self.Er = nn.Parameter(torch.randn(max_len, d_head))
+        elif self.pe_type == 'rotary':
+            self.rotary_embd = RotaryEmbedding(d_head)
+        elif self.pe_type == None:
+            pass
         else:
-            self.Er = None
+            raise ValueError(f"Unknown positional encoding type: {pe_type}.")
 
         self.dropout = nn.Dropout(dropout)
 
@@ -132,7 +162,6 @@ class GlobalAttention(nn.Module):
             torch.tril(torch.ones(max_len, max_len))
             .unsqueeze(0).unsqueeze(0)
         )
-        # self.mask.shape = (1, 1, max_len, max_len)
 
     def forward(self, x, mask=None):
         # x.shape == (batch_size, seq_len, n_embd)
@@ -143,22 +172,26 @@ class GlobalAttention(nn.Module):
                 "sequence length exceeds model capacity"
             )
 
-        k_t = self.key(x).reshape(batch_size, seq_len,
-                                  self.n_head, -1).permute(0, 2, 3, 1)
-        # k_t.shape = (batch_size, n_head, d_head, seq_len)
+        # 0: batch_size, 1: seq_len, 2: n_head, 3: d_head
+        # k_t = self.key(x).reshape(batch_size, seq_len,
+        #                           self.n_head, -1).permute(0, 2, 3, 1)
+        k = self.key(x).reshape(batch_size, seq_len,
+                                self.n_head, -1).transpose(1, 2)
         v = self.value(x).reshape(batch_size, seq_len,
                                   self.n_head, -1).transpose(1, 2)
         q = self.query(x).reshape(batch_size, seq_len,
                                   self.n_head, -1).transpose(1, 2)
         # shape = (batch_size, n_head, seq_len, d_head)
 
-        QK_t = torch.matmul(q, k_t)
+        if self.pe_type == 'rotary':
+            q = self.rotary_embd.rotate_queries_or_keys(q)
+            k = self.rotary_embd.rotate_queries_or_keys(k)
+
+        QK_t = torch.matmul(q, k.transpose(2, 3))
+        # k.transpose.shape = (batch_size, n_head, d_head, seq_len)
         # QK_t.shape = (batch_size, n_head, seq_len, seq_len)
 
-        if self.rel_pe:
-            attn = QK_t / math.sqrt(q.size(-1))
-
-        else:
+        if self.pe_type == 'rel':
             start = self.max_len - seq_len
             Er_t = self.Er[start:, :].transpose(0, 1)
             # Er_t.shape = (d_head, seq_len)
@@ -167,6 +200,8 @@ class GlobalAttention(nn.Module):
             Srel = self._skew(QEr)
             # Srel.shape = (batch_size, n_head, seq_len, seq_len)
             attn = (QK_t + Srel) / math.sqrt(q.size(-1))
+        else:
+            attn = QK_t / math.sqrt(q.size(-1))
 
         mask = self.mask[:, :, :seq_len, :seq_len]
         # mask.shape = (1, 1, seq_len, seq_len)
@@ -202,7 +237,7 @@ class GlobalAttention(nn.Module):
         return Srel
 
 
-class LocalAttention(nn.module):
+class LocalAttn(nn.Module):
 
     def __init__(self, n_embd, n_head, block_len=128, dropout=0.1):
 
@@ -215,9 +250,9 @@ class LocalAttention(nn.module):
         self.block_len = block_len
         self.n_embd = n_embd
         self.n_head = n_head
-        self.key = nn.Linear(n_embd, n_embd)
-        self.value = nn.Linear(n_embd, n_embd)
-        self.query = nn.Linear(n_embd, n_embd)
+        self.key = nn.Linear(n_embd, n_embd, bias=False)
+        self.value = nn.Linear(n_embd, n_embd, bias=False)
+        self.query = nn.Linear(n_embd, n_embd, bias=False)
         self.dropout = nn.Dropout(dropout)
         self.Er = nn.Parameter(torch.randn(2 * block_len - 1, d_head))
 
