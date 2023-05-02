@@ -75,7 +75,7 @@ def pad(tokens, max_len=600):
     return padded_tokens
 
 
-def main(midi_dir, df, t_bounds, token_path, add_eos=True, max_len=600, test_size=0.2):
+def main(midi_dir, df, t_bounds, token_path, add_eos=True, len_limit=1024, test_size=0.2):
 
     if not os.path.exists(token_path):
         tokens = MIDI_tokenization(midi_dir, df, t_bounds, token_path)
@@ -87,10 +87,14 @@ def main(midi_dir, df, t_bounds, token_path, add_eos=True, max_len=600, test_siz
         tokens = [np.append(token, eos_id) for token in tokens]
 
     # Padding
-    padded_tokens = pad(tokens, max_len)
+    # tokens = pad(tokens, max_len)
+
+    tokens = np.array(tokens, dtype=object)
+    len_token = np.array([len(token) for token in tokens])
+    selected_tokens = tokens[np.where(len_token <= len_limit)]
 
     # Split train test set
-    train, test = train_test_split(padded_tokens, test_size=test_size)
+    train, test = train_test_split(selected_tokens, test_size=test_size)
     return train, test
 
 
