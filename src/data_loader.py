@@ -5,7 +5,8 @@ from torch.utils.data import Dataset
 from midi_tokenizer import pad_id
 
 
-def _torch_collate_batch(examples, pad_id=pad_id):
+def _torch_collate_batch(examples, pad_id=pad_id,
+                         max_len=1024, pad_to_max_len=False, align_right=False):
     """Collate `examples` into a batch, adapted from huggingface transformer"""
 
     # Tensorize if necessary.
@@ -20,11 +21,17 @@ def _torch_collate_batch(examples, pad_id=pad_id):
     if are_tensors_same_length:
         return torch.stack(examples, dim=0)
 
-    # Creating the full tensor and filling it with our data.
-    max_length = max(x.size(0) for x in examples)
-    result = examples[0].new_full([len(examples), max_length], pad_id)
+    if not pad_to_max_len:
+        # Creating the full tensor and filling it with our data.
+        max_len = max(x.size(0) for x in examples)
+
+    result = examples[0].new_full([len(examples), max_len], pad_id)
     for i, example in enumerate(examples):
-        result[i, : example.shape[0]] = example
+
+        if align_right:
+            result[i, -example.shape[0]:] = example
+        else:
+            result[i, : example.shape[0]] = example
 
     return result
 
@@ -34,19 +41,33 @@ class MIDITokenDataCollator():
     Data collator
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, pad_id=pad_id, q_len=None, max_len=1024, pad_to_max_len=False, align_right=False):
+        self.q_len = q_len
+        self.pad_id = pad_id
+        self.max_len = max_len
+        self.pad_to_max_len = pad_to_max_len
+        self.align_right = align_right
 
     def __post_init__(self):
         pass
 
-    def __call__(self, examples, pad_id=0):
+    def __call__(self, examples):
         # Handle dict or lists with proper padding and conversion to tensor.
-        batch = {"input_ids": _torch_collate_batch(examples)}
+        batch = {"input_ids": _torch_collate_batch(examples,
+                                                   pad_id=self.pad_id,
+                                                   max_len=self.max_len,
+                                                   pad_to_max_len=self.pad_to_max_len,
+                                                   align_right=self.align_right)}
 
         labels = batch["input_ids"].clone()
-        labels[labels == pad_id] = -100
+
+        if self.q_len is not None:
+            labels = labels[:, -self.q_len:]
+            batch["q_len"] = self.q_len
+
+        labels[labels == self.pad_id] = -100
         batch["labels"] = labels
+
         return batch
 
 

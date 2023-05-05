@@ -7,6 +7,7 @@ from rotary_embedding_torch import RotaryEmbedding
 
 class MLPBlock(nn.Module):
     def __init__(self, n_embd, n_inter, dropout=.1):
+        super().__init__()
         # hugging face use conv1d
         self.fc = nn.Linear(n_embd, n_inter, bias=False)
         self.proj = nn.Linear(n_inter, n_embd, bias=False)
@@ -25,6 +26,8 @@ class AttnBlock(nn.Module):
                  pe_type=None, attn_type='global', dropout=.1, block_len=128,
                  residual=False):
 
+        super().__init__()
+
         self.residual = residual
         if residual:
             self.fc = nn.Linear(n_embd, n_embd, bias=False)
@@ -34,10 +37,12 @@ class AttnBlock(nn.Module):
         self.attn_type = attn_type
         if attn_type == 'local':
             self.attn = LocalAttn(block_len)
-        elif attn_type == 'global':
-            self.attn = GlobalAttn(n_embd, n_head, max_len, pe_type)
-        elif attn_type == 'perceiver':
-            self.attn = PerceiverAttn(n_embd, n_head, max_len, pe_type)
+        elif attn_type in ['global', 'perceiver-self']:
+            self.attn = GlobalAttn(
+                n_embd, n_head, max_len=max_len, dropout=dropout, pe_type=pe_type)
+        elif attn_type == 'perceiver-cross':
+            self.attn = PerceiverAttn(
+                n_embd, n_head, max_len=max_len, dropout=dropout, pe_type=pe_type)
         else:
             raise ValueError("Unknown type of attention Module")
 
@@ -48,11 +53,16 @@ class AttnBlock(nn.Module):
         self.mlp_block = MLPBlock(n_embd, n_fc, dropout)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, q_len=128):
+    def forward(self, x, q_len=512):
 
         x = self.ln_1(x)
-        attn = self.attn(x)
-        x = self.resid_dropout(x + attn)
+        attn = self.attn(x, q_len)
+
+        if self.attn_type == 'perceiver-cross':
+            print(x[:, -q_len:, :].shape, attn.shape)
+            x = self.resid_dropout(x[:, -q_len:, :] + attn)
+        else:
+            x = self.resid_dropout(x + attn)
 
         # Implement residual structure for perceiver block
         if self.residual:
@@ -65,7 +75,7 @@ class AttnBlock(nn.Module):
 
 
 class PerceiverAttn(nn.Module):
-    def __init__(self, max_len, n_embd, n_head, dropout=.1, pe_type='rotary'):
+    def __init__(self, n_embd, n_head, max_len=1024, dropout=.1, pe_type='rotary'):
         super().__init__()
         d_head, remainder = divmod(n_embd, n_head)
         if remainder:
@@ -86,26 +96,29 @@ class PerceiverAttn(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(n_embd)
 
-    def forward(self, x, q_len):
+    def forward(self, x, q_len=512):
         # Todo: Masking!
         batch_size, seq_len, _ = x.shape
 
-        assert q_len < seq_len, "Error: q_len >= seq_len"
+        if q_len > seq_len:
+            q_len = seq_len
+        # assert q_len < seq_len, "Error: q_len >= seq_len"
 
-        x_kv = self.ln(x)
-        x_q = self.ln(x[:, -q_len:, :, ])
-
-        k_t = self.key(x_kv).reshape(batch_size, seq_len,
-                                     self.n_head, -1).permute(0, 2, 3, 1)
+        k = self.key(x).reshape(batch_size, seq_len,
+                                self.n_head, -1).transpose(1, 2)
         # k_t.shape = (batch_size, n_head, d_head, seq_len)
-        v = self.value(x_kv).reshape(batch_size, seq_len,
-                                     self.n_head, -1).transpose(1, 2)
+        v = self.value(x).reshape(batch_size, seq_len,
+                                  self.n_head, -1).transpose(1, 2)
         # shape = (batch_size, n_head, seq_len, d_head)
-        q = self.query(x_q).reshape(batch_size, q_len,
-                                    self.n_head, -1).transpose(1, 2)
+        q = self.query(x[:, -q_len:, :]).reshape(batch_size, q_len,
+                                                 self.n_head, -1).transpose(1, 2)
         # shape = (batch_size, n_head, q_len, d_head)
 
-        QK_t = torch.matmul(q, k_t)
+        if self.pe_type == 'rotary':
+            q = self.rotary_embd.rotate_queries_or_keys(q)
+            k = self.rotary_embd.rotate_queries_or_keys(k)
+
+        QK_t = torch.matmul(q, k.transpose(2, 3))
         attn = QK_t / math.sqrt(q.size(-1))
 
         # q_len could be changed during inference. We don't register mask at initialization.
@@ -127,7 +140,7 @@ class GlobalAttn(nn.Module):
     Modified: Yijing Feng (Add mask to QEr, add RoPE)
     """
 
-    def __init__(self, n_embd, n_head, max_len=1024, dropout=0.1, pe_type='rel'):
+    def __init__(self, n_embd, n_head, max_len=1024, dropout=0.1, pe_type='rel', d_rotary=32):
         super().__init__()
         d_head, remainder = divmod(n_embd, n_head)
         if remainder:
@@ -149,7 +162,7 @@ class GlobalAttn(nn.Module):
             # Er can be shared across heads
             self.Er = nn.Parameter(torch.randn(max_len, d_head))
         elif self.pe_type == 'rotary':
-            self.rotary_embd = RotaryEmbedding(d_head)
+            self.rotary_embd = RotaryEmbedding(d_rotary)
         elif self.pe_type == None:
             pass
         else:
@@ -273,7 +286,7 @@ class LocalAttn(nn.Module):
             block_len = self.block_len
 
         pad_len = torch.fmod(torch.tensor(-seq_len), torch.tensor(block_len))
-        padded_x = torch.nn.functional.pad(x, [0, 0, 0, pad_len, 0, 0])
+        padded_x = F.pad(x, [0, 0, 0, pad_len, 0, 0])
         n_block = (seq_len + pad_len) / block_len
         padded_x = padded_x.reshape(int(batch_size * n_block), block_len, -1)
 
