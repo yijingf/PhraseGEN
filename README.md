@@ -8,18 +8,15 @@ Musical phrases generation.
 ## Performance
 |    Model    | Pretrained GPT-2 | PerceiverAR | Transformer w/ Global RPE | Transformer w/ Local RPE |
 |:-----------:|:----------------:|:-----------:|:-------------------------:|:------------------------:|
-| Max Seq Len |        600       |             |                           |                          |
-|   # Layer   |        12        |             |                           |                          |
-|    # Head   |        12        |             |                           |                          |
-|  Train Loss |                  |             |                           |                          |
+| Max Seq Len |        600       |       1024      |                           |                          600|
+|   # Layer   |        12        |      12       |                           |          18                |
+|    # Head   |        12        |     16        |                           |           12               |
+|  Train Loss |         2.03         |             |                           |                          |
 |  Eval Loss  |                  |             |                           |                          |
 
 
 ## Todo
-
-- [ ] Perceiver Masking.
-- [ ] Model generation module.
-- [ ] Debug relative local attn. 
+- [] Evaluation metrics
 
 
 ## Name
