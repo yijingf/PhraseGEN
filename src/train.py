@@ -60,16 +60,21 @@ if from_pretrain:
 else:
     if model_type == 'perceiverAR':
         from models import PerceiverAR, PerceiverARConfig
-        config = PerceiverARConfig(n_positions=1024,
-                                   n_embd=1024,
-                                   n_layer=12,
-                                   n_head=16)
+        config = PerceiverARConfig()  # Set model param here
         model = PerceiverAR(config)
 
     # Todo: Load customized model
     elif model_type == 'music-transformer':
-        from models import MusicTransformer
-        model = MusicTransformer()
+        from models import MusicTransformer, MusicTransformerConfig
+        config = MusicTransformerConfig()
+        model = MusicTransformer(config)
+
+    elif model_type == 'transformer-xl':
+        pass
+
+    else:
+        raise ValueError(f"Unknown model: {model_type}")
+
 
 # max_len = 600
 max_len = 1024  # perceiverAR

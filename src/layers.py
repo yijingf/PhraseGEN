@@ -59,7 +59,6 @@ class AttnBlock(nn.Module):
         attn = self.attn(x, q_len)
 
         if self.attn_type == 'perceiver-cross':
-            print(x[:, -q_len:, :].shape, attn.shape)
             x = self.resid_dropout(x[:, -q_len:, :] + attn)
         else:
             x = self.resid_dropout(x + attn)
@@ -123,7 +122,7 @@ class PerceiverAttn(nn.Module):
 
         # q_len could be changed during inference. We don't register mask at initialization.
         mask = F.pad(torch.tril(torch.ones(q_len, q_len + 1)),
-                     (seq_len - q_len - 1, 0), value=1)
+                     (seq_len - q_len - 1, 0), value=1).to(attn.device)
         # mask.shape = (1, 1, seq_len, seq_len)
         attn = attn.masked_fill(mask == 0, float("-inf"))
 
