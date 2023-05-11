@@ -89,9 +89,12 @@ class MIDIDataset(Dataset):
 
     def __init__(self, token_path, max_len=600):
 
-        # Load preprocessed data
+        # Load midi token sequences
         self.tokens = np.load(token_path, allow_pickle=True)
-        self.tokens = [i[: max_len] for i in self.tokens]
+
+        # Remove sequence longer than max_len
+        self.tokens = [i for i in self.tokens if len(i) <= max_len]
+        # self.tokens = [i[: max_len] for i in self.tokens]
 
     def __getitem__(self, index):
         """Return 

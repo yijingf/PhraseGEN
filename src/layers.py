@@ -231,7 +231,7 @@ class GlobalAttn(nn.Module):
 
     def _mask_QEr(sel, QEr):
         _, _, seq_len, _ = QEr.shape
-        mask = torch.tril(torch.ones(seq_len, seq_len)).flip(1)
+        mask = torch.tril(torch.ones(seq_len, seq_len)).flip(1).to(QEr.device)
         return QEr.masked_fill(mask == 0, 0)
 
     def _skew(self, QEr):
