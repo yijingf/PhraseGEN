@@ -12,7 +12,21 @@ from utils.midi_utils import trim_midi, pretty_midi_sort
 
 
 def MIDI_tokenization(midi_dir, df, t_bounds, token_path,
-                      min_t_phrase=1, max_t_phrase=60):
+                      min_t_phrase=4, max_t_phrase=60, min_n_note=8):
+    """_summary_
+
+    Args:
+        midi_dir (_type_): _description_
+        df (_type_): _description_
+        t_bounds (_type_): _description_
+        token_path (_type_): _description_
+        min_t_phrase (int, optional): Minimum length of a phrase. Defaults to 4, i.e. one bar of 60BPM.
+        max_t_phrase (int, optional): _description_. Defaults to 60.
+        min_n_note (int, optional): Minimum notes in a phrase. Defaults to 4, i.e. 8 8th note in a bar.
+
+    Returns:
+        _type_: _description_
+    """
 
     tokens = []
 
@@ -47,8 +61,8 @@ def MIDI_tokenization(midi_dir, df, t_bounds, token_path,
             if not len(pm_seg.instruments[0].notes):
                 continue
 
-            # if len(pm_seg.instruments[0].notes) < min_n_note:
-            #     continue
+            if len(pm_seg.instruments[0].notes) < min_n_note:
+                continue
 
             # Tokenize MIDI segments
             events_id = encode_pm(pm_seg)
@@ -75,7 +89,7 @@ def pad(tokens, max_len=600):
     return padded_tokens
 
 
-def main(midi_dir, df, t_bounds, token_path, add_eos=True, len_limit=1024, test_size=0.2):
+def main(midi_dir, df, t_bounds, token_path, add_eos=True, len_limit=2048, test_size=0.2):
 
     if not os.path.exists(token_path):
         tokens = MIDI_tokenization(midi_dir, df, t_bounds, token_path)

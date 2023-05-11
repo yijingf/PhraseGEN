@@ -97,6 +97,7 @@ def laplacian_segment(y, sr=22050, k=5):
 
     # If we want k clusters, use the first k normalized eigenvectors.
     # Fun exercise: see how the segmentation changes as you vary k
+    # Basically: Lager K, finer segments
     X = evecs[:, :k] / Cnorm[:, k - 1:k]
 
     # Let's use these k components to cluster beats into segments
