@@ -102,6 +102,11 @@ def trim_eos(tokens):
 
 
 def decode(tokens, start_time=0):
+    """
+    Returns:
+        _type_: _description_
+    """
+    assert isinstance(tokens, list) or isinstance(tokens, np.ndarray), "Decoder only handles list or numpy.ndarray"
 
     decoding_state = encoding_spec.init_decoding_state_fn()
 
