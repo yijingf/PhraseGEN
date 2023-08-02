@@ -1,4 +1,28 @@
-"""Event Time Scale: Quarter Note
+"""Extract notes (grouped by measures), tempo, time signature from humdrum file, and output a dictionary that contains following attributes:
+{
+    "note": {
+        `measure_id`:{
+            "event": [`note onset`, `pitch`, `note duration`],
+            "tempo": `tempo`,
+            "time_signature": `time signature`,
+            "key": `key`
+            },
+    "struct": {
+        "pattern": `structure pattern`,
+        "attr": {
+            `section`: {"id": `measure index of section onset`,
+                        "start_pos": `start position within a measure`}
+            }
+        }
+}
+
+The note onset and duration are scaled by quarter note.
+
+Humdrum file could be loaded
+(1) directly as .krn file
+(2) as .xml converted by `hum2xml`.
+Method (2) is recommended because music21 is not very reliable handling .krn file.
+
 """
 import re
 import math
@@ -6,6 +30,50 @@ import music21
 from fractions import Fraction
 from music21 import key, stream, pitch
 # environment.set("musescoreDirectPNGPath", "/Applications/MuseScore 4.app/Contents/MacOS/mscore")
+
+
+def is_kern_note(entry):
+    """Check if a kern entry is a note, i.e. follows the pattern such as `4C`, `4.C`.
+
+    Args:
+        entry (str): _description_
+
+    Returns:
+        bool: _description_
+    """
+    is_note = False
+
+    entry = entry.replace("(", "")
+    entry = entry.replace("[", "")
+    entry = entry.replace("<", "")
+
+    is_full = bool(re.match(r'[0-9]+[a-zA-Z]', entry))
+    is_dot = bool(re.match(r'[0-9]]+[.][a-zA-Z]', entry))
+
+    if is_full or is_dot:
+        is_note = True
+
+    return is_note
+
+
+def entries_has_note(entries):
+    """For sanity check. Check if there is note within given entries.
+
+    Args:
+        entries (list): _description_
+
+    Returns:
+        bool: _description_
+    """
+
+    has_note = False
+    for entry in entries:
+        has_note = any([is_kern_note(item) for item in entry.split("\t")])
+
+        if has_note:
+            break
+
+    return has_note
 
 
 def norm_pitch(pitch_str):
@@ -152,7 +220,7 @@ def get_struct_pattern(krn_entry):
         krn_entry (_type_): _description_
 
     Returns:
-        list: an array of structure pattern
+        list: an array of sections
     """
 
     pattern = []
@@ -161,29 +229,29 @@ def get_struct_pattern(krn_entry):
         entry = entry.split("\t")[0]
         if entry[:3] == "*>[":
             assert entry[-1] == "]"
-            struct_str = entry.split("\t")[0]
-            pattern = struct_str[3:-1].split(",")
+            sect_str = entry.split("\t")[0]
+            pattern = sect_str[3:-1].split(",")
             break
 
     return pattern
 
 
-def get_struct_measure_idx(krn_entry):
-    """Get the onset (measure id) of each `structure`.
+def get_sect_measure_idx(krn_entry):
+    """Get the onset (measure id) of each section.
 
     Args:
         krn_entry (list): _description_
 
     Returns:
         dict: `idx`: onset measure id
-              `start_from_0`: whether the structure onset is at the beginning of the measure
+              `start_from_0`: whether the section starts from the downbeat of a measure.
     """
-    struct_measure_idx = {}
+    sect_measure_idx = {}
 
     for i, entry in enumerate(krn_entry):
 
         if entry[:2] == "*>":
-            struct_str = entry.split("\t")[0].replace("*>", "")
+            sect_str = entry.split("\t")[0].replace("*>", "")
 
             j = i - 1
 
@@ -195,13 +263,18 @@ def get_struct_measure_idx(krn_entry):
                 last_entry = krn_entry[j].split("\t")[0]
                 matched = re.match(r"=[0-9]+", last_entry)
 
-            start_from_0 = (j == i - 1)
+            if j != i - 1:
+                has_note = entries_has_note(krn_entry[j:i])
+            else:
+                has_note = False
+
+            # start_from_0 = (j == i - 1)
             measure_idx = int(last_entry[1: matched.end()])
 
-            struct_measure_idx[struct_str] = {"idx": measure_idx,
-                                              "start_from_0": start_from_0}
+            sect_measure_idx[sect_str] = {"idx": measure_idx,
+                                          "start_from_0": not has_note}
 
-    return struct_measure_idx
+    return sect_measure_idx
 
 
 def krn_attr_extract(krn_file):
@@ -224,19 +297,23 @@ def krn_attr_extract(krn_file):
     # Get init measure index
     init_measure_str = None
     for i, entry in enumerate(krn_entry):
+
         if entry[0] == "=":
             measure_start_idx = i
             init_measure_str = entry.split("\t")[0]
             break
 
+    has_note = entries_has_note(krn_entry[: measure_start_idx])
+
     matched = re.match(r'=[0-9]+', init_measure_str)
 
     if bool(matched):
         init_measure_idx = int(init_measure_str[1: matched.end()])
-
-        matched = re.match(r'=[0-9]+[-]', init_measure_str)
-        if not bool(matched):
+        if has_note:
             init_measure_idx -= 1
+        # matched = re.match(r'=[0-9]+[-]', init_measure_str)
+        # if not bool(matched):
+        #     init_measure_idx -= 1
     else:
         init_measure_idx = 0
 
@@ -245,24 +322,24 @@ def krn_attr_extract(krn_file):
     # Get structure pattern
     pattern = get_struct_pattern(krn_entry)
     if not len(pattern):
-        print(f"No structure pattern found in {krn_file}")
+        # Warning(f"No structure pattern found in {krn_file}")
         pattern = ["A"]
 
     krn_entry = krn_entry[measure_start_idx + 1:]
 
-    # Get measure index corresponds of structure onset
+    # Get measure index corresponds of section onset
     if len(pattern) > 1:
-        struct_measure_idx = get_struct_measure_idx(krn_entry)
+        sect_measure_idx = get_sect_measure_idx(krn_entry)
     else:
-        struct_measure_idx = {}
+        sect_measure_idx = {}
 
-    first_struct = pattern[0]
-    if first_struct not in struct_measure_idx:
-        struct_measure_idx[first_struct] = {"idx": init_measure_idx,
-                                            "start_from_0": init_measure_idx == 1}
+    first_sect = pattern[0]
+    if first_sect not in sect_measure_idx:
+        sect_measure_idx[first_sect] = {"idx": init_measure_idx,
+                                        "start_from_0": not has_note}
 
     krn_attr = {"pattern": pattern,
-                "attr": struct_measure_idx,
+                "attr": sect_measure_idx,
                 "time_signature": ts,
                 "tempo": tp}
 
@@ -311,7 +388,7 @@ def part_event_extract(part):
     for i, measure in enumerate(measures):
 
         # time signature
-        if measure.timeSignature and measure.timeSignature != ts:
+        if measure.timeSignature and measure.timeSignature.ratioString != ts.ratioString:
             ts = measure.timeSignature
             bar_dur = Fraction(ts.barDuration.quarterLength)
 
@@ -429,8 +506,8 @@ def event_extract(krn_file, mxml_file=None):
 
     # Extract structure pattern and attribute
     krn_attr = krn_attr_extract(krn_file)
-    init_struct = krn_attr["pattern"][0]
-    krn_measure_offset = krn_attr["attr"][init_struct]["idx"]
+    init_sect = krn_attr["pattern"][0]
+    krn_measure_offset = krn_attr["attr"][init_sect]["idx"]
 
     # Extract notes
     event = {}
@@ -490,7 +567,7 @@ def event_extract(krn_file, mxml_file=None):
     sorted_event["struct"]["pattern"] = krn_attr["pattern"]
     sorted_event["struct"]["attr"] = {}
 
-    for struct, pos in krn_attr["attr"].items():
+    for sect, pos in krn_attr["attr"].items():
 
         idx = pos["idx"] - measure_offset
         measure_ts = event[idx]["time_signature"]
@@ -499,12 +576,13 @@ def event_extract(krn_file, mxml_file=None):
 
         if not pos["start_from_0"]:
             start_pos = measure_dur - measure_split[-1]
-            assert start_pos != measure_dur, f"no a bar line found in measure{idx}"
+            assert start_pos != measure_dur, f"no a bar line found in measure {idx}"
+            assert start_pos != 0, f"section {sect} in measure {idx} should not start from 0"
         else:
             start_pos = Fraction(0)
 
-        sorted_event["struct"]["attr"][struct] = {"idx": idx,
-                                                  "onset": f"o-{start_pos}"}
+        sorted_event["struct"]["attr"][sect] = {"idx": idx,
+                                                "onset": f"o-{start_pos}"}
 
     return sorted_event
 
