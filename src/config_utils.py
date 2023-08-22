@@ -73,6 +73,7 @@ class MusicTransformerConfig(PretrainedConfig):
         n_positions=1024,  # seq_len
         n_embd=768,
         n_layer=8,
+        n_fc=3072,
         n_head=12,
         bos_token_id=1,
         eos_token_id=1,
@@ -90,6 +91,7 @@ class MusicTransformerConfig(PretrainedConfig):
         self.n_head = n_head
         self.bos_token_id = bos_token_id
         self.eos_token_id = eos_token_id
+        self.n_fc = n_fc
 
         self.initializer_range = initializer_range
         self.pdrop = pdrop

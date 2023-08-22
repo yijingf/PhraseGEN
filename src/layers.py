@@ -1,8 +1,27 @@
+import math
 import torch
 import torch.nn as nn
-import math
 import torch.nn.functional as F
 from rotary_embedding_torch import RotaryEmbedding
+
+
+def positionalencoding1d(n_embd, seq_len):
+    """
+    :param n_embd: dimension of the model
+    :param seq_len: seq_len of positions
+    :return: seq_len*n_embd position matrix
+    """
+    if n_embd % 2 != 0:
+        raise ValueError("Cannot use sin/cos positional encoding with "
+                         "odd dim (got dim={:d})".format(n_embd))
+    pe = torch.zeros(seq_len, n_embd)
+    position = torch.arange(0, seq_len).unsqueeze(1)
+    div_term = torch.exp((torch.arange(0, n_embd, 2, dtype=torch.float) *
+                         -(math.log(10000.0) / n_embd)))
+    pe[:, 0::2] = torch.sin(position.float() * div_term)
+    pe[:, 1::2] = torch.cos(position.float() * div_term)
+
+    return pe
 
 
 class MLPBlock(nn.Module):
@@ -96,7 +115,6 @@ class PerceiverAttn(nn.Module):
         self.ln = nn.LayerNorm(n_embd)
 
     def forward(self, x, q_len=512):
-        # Todo: Masking!
         batch_size, seq_len, _ = x.shape
 
         if q_len > seq_len:
@@ -175,7 +193,7 @@ class GlobalAttn(nn.Module):
             .unsqueeze(0).unsqueeze(0)
         )
 
-    def forward(self, x, mask=None):
+    def forward(self, x, attn_mask=None, key_padding_mask=None):
         # x.shape == (batch_size, seq_len, n_embd)
         batch_size, seq_len, _ = x.shape
 
@@ -215,10 +233,16 @@ class GlobalAttn(nn.Module):
         else:
             attn = QK_t / math.sqrt(q.size(-1))
 
+        # Attention Mask
         mask = self.mask[:, :, :seq_len, :seq_len]
         # mask.shape = (1, 1, seq_len, seq_len)
         attn = attn.masked_fill(mask == 0, float("-inf"))
         # attn.shape = (batch_size, n_head, seq_len, seq_len)
+
+        # Padding Mask
+        if key_padding_mask is not None:
+            attn = attn.masked_fill(key_padding_mask.unsqueeze(1).unsqueeze(2) == 0,
+                                    float('-inf'))
 
         attn = F.softmax(attn, dim=-1)
         out = torch.matmul(attn, v)

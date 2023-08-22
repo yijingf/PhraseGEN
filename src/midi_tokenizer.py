@@ -14,12 +14,16 @@ codec = vocabularies.build_codec(
 encoding_spec = note_sequences.NoteEncodingSpec
 
 num_special_tokens = 3
-base_vocab_size = 1517
+base_vocab_size = 1517  # Todo: Will this change if velocity is not encoded?
 
 # Token ID after including num_special_tokens
 unk_id = 2
 eos_id = 1
 pad_id = 0
+
+cls_id = base_vocab_size
+sep_id = base_vocab_size + 1
+mask_id = base_vocab_size + 2
 
 
 def rle_shift(events):
@@ -106,7 +110,8 @@ def decode(tokens, start_time=0):
     Returns:
         _type_: _description_
     """
-    assert isinstance(tokens, list) or isinstance(tokens, np.ndarray), "Decoder only handles list or numpy.ndarray"
+    assert isinstance(tokens, list) or isinstance(
+        tokens, np.ndarray), "Decoder only handles list or numpy.ndarray"
 
     decoding_state = encoding_spec.init_decoding_state_fn()
 

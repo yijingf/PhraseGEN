@@ -10,7 +10,7 @@ from transformers.modeling_outputs import CausalLMOutput
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils.model_parallel_utils import get_device_map, assert_device_map
 
-from layers import AttnBlock
+from layers import AttnBlock, positionalencoding1d
 from config_utils import PerceiverARConfig, MusicTransformerConfig
 
 
@@ -220,6 +220,115 @@ class MusicTransformer(MusicTransformerPretrained):
 
         self.layers = nn.ModuleList([AttnBlock(config.n_embd, config.n_head,
                                                max_len=config.n_positions,
+                                               n_fc=config.n_fc,
+                                               attn_type='global',
+                                               pe_type=config.pe_type,
+                                               dropout=config.pdrop)
+                                     for _ in range(config.n_layer)])
+        self.ln_f = nn.LayerNorm(config.n_embd)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
+        self.model_parallel = False
+        self.device_map = None
+
+    def parallelize(self, device_map=None):
+        self.device_map = (
+            get_device_map(len(self.n_layer),
+                           range(torch.cuda.device_count()))  # Todo: double check n_layer
+            if device_map is None
+            else device_map
+        )
+        assert_device_map(self.device_map, self.n_layer)
+
+        self.first_device = "cpu" if "cpu" in self.device_map.keys() else "cuda:" + \
+            str(min(self.device_map.keys()))
+        self.last_device = "cuda:" + str(max(self.device_map.keys()))
+
+        self.wte = self.wte.to(self.first_device)
+        # self.wpe = self.wpe.to(self.first_device)
+
+        # Load onto devices
+        for k, v in self.device_map.items():
+            for block in v:
+                cuda_device = "cuda:" + str(k)
+                self.layers[block] = self.layers[block].to(cuda_device)
+
+        # ln_f to last device
+        self.ln_f = self.ln_f.to(self.last_device)
+
+        self.lm_head = self.lm_head.to(self.first_device)
+        self.model_parallel = True
+        return
+
+    def deparallelize(self):
+        self.model_parallel = False
+        self.device_map = None
+        self.first_device = "cpu"
+        self.last_device = "cpu"
+        self.wte = self.wte.to("cpu")
+        # self.wpe = self.wpe.to("cpu")
+
+        self.cross_attn = self.cross_attn.to("cpu")
+
+        for index in range(len(self.n_layer)):
+            self.layers[index] = self.layers[index].to("cpu")
+        self.ln_f = self.ln_f.to("cpu")
+
+        self.lm_head = self.lm_head.to("cpu")
+        self.model_parallel = False
+        torch.cuda.empty_cache()
+
+    def forward(self, input_ids, labels=None, attn_mask=None, return_dict=True, **kwargs):
+        x = self.wte(input_ids) / math.sqrt(self.n_embd)
+        # PE
+        # _, seq_len = input_ids.shape
+        # pe = positionalencoding1d(self.n_embd, seq_len)
+        # x = x + pe.to(x.device)
+
+        for layer in self.layers:
+            x = layer(x, attn_mask)
+
+        x = self.ln_f(x)
+        logits = self.lm_head(x)
+
+        # Loss
+        loss = None
+        if labels is not None:
+            # move labels to correct device to enable model parallelism
+            labels = labels.to(logits.device)
+            # Shift so that tokens < n predict n
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+
+            loss_fn = nn.CrossEntropyLoss()  # -100 index = padding token
+            # Flatten the tokens
+            loss = loss_fn(
+                shift_logits.view(-1, self.config.vocab_size), shift_labels.view(-1))
+
+        return CausalLMOutput(loss=loss, logits=logits)
+
+
+class MusicBert(MusicTransformerPretrained):
+    """No difference from vanila transformer except for relative PE for each attn block implemented in an efficient way
+    Args:
+        MusicTransformerPretrained (_type_): _description_
+    """
+
+    def __init__(self, config):
+        # (vocab_size, seq_len=None, n_embd=768, n_head=12, n_layer=12, dropout=.1, pe_type='rotary')
+        # def __init__(self, vocab_size, seq_len=None, n_embd=768, n_head=12, n_layer=12, dropout=.1, pe_type='rel'):
+        super().__init__(config)
+
+        self.n_embd = config.n_embd
+        self.vocab_size = config.vocab_size
+        self.wte = nn.Embedding(config.vocab_size, config.n_embd)
+
+        # Todo: positional encoding
+        # Is it really necessary since we have rel-pe for each attn block?
+
+        self.layers = nn.ModuleList([AttnBlock(config.n_embd, config.n_head,
+                                               n_fc=config.n_fc,
+                                               max_len=config.n_positions,
                                                attn_type='global',
                                                pe_type=config.pe_type,
                                                dropout=config.pdrop)
@@ -279,8 +388,10 @@ class MusicTransformer(MusicTransformerPretrained):
 
     def forward(self, input_ids, labels=None, return_dict=True, **kwargs):
         x = self.wte(input_ids) / math.sqrt(self.n_embd)
-
-        # Todo: Global PE
+        # PE
+        # _, seq_len = input_ids.shape
+        # pe = positionalencoding1d(self.n_embd, seq_len)
+        # x = x + pe.to(x.device)
 
         for layer in self.layers:
             x = layer(x)
@@ -293,13 +404,9 @@ class MusicTransformer(MusicTransformerPretrained):
         if labels is not None:
             # move labels to correct device to enable model parallelism
             labels = labels.to(logits.device)
-            # Shift so that tokens < n predict n
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
 
             loss_fn = nn.CrossEntropyLoss()  # -100 index = padding token
             # Flatten the tokens
             loss = loss_fn(
-                shift_logits.view(-1, self.config.vocab_size), shift_labels.view(-1))
-
+                logits.view(-1, self.config.vocab_size), labels.view(-1))
         return CausalLMOutput(loss=loss, logits=logits)
