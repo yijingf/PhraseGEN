@@ -169,22 +169,22 @@ def check_tempo_shift(event, attr, measure_offset=0):
     ts_shift.append(max_xml_measure + measure_offset + 1)
     ts_pos = 0
 
-    for idx in range(min_xml_measure, max_xml_measure + 1):
-        if idx + measure_offset >= ts_shift[ts_pos + 1]:
+    for i in range(min_xml_measure, max_xml_measure + 1):
+        if i + measure_offset >= ts_shift[ts_pos + 1]:
             ts_pos += 1
-        event_ts = event[idx]['time_signature']
+        event_ts = event[i]['time_signature']
         krn_ts = attr['time_signature'][ts_shift[ts_pos]]
-        assert event_ts == krn_ts, f"{idx}"
+        assert event_ts == krn_ts, f"{i}"
 
     return
 
 
-def get_ts_tp(krn_entry, init_measure_idx=1):
+def get_ts_tp(krn_entry, init_i_measure=1):
     """Get time signature and tempo from humdrum entry.
 
     Args:
         krn_entry (list): _description_
-        init_measure_idx (int, optional): _description_. Defaults to 1.
+        init_i_measure (int, optional): _description_. Defaults to 1.
 
     Returns:
         _type_: _description_
@@ -192,7 +192,7 @@ def get_ts_tp(krn_entry, init_measure_idx=1):
     ts_measure_idx = {}
     tp_measure_idx = {}
 
-    measure_idx = init_measure_idx
+    i_measure = init_i_measure
 
     for entry in krn_entry:
 
@@ -200,13 +200,13 @@ def get_ts_tp(krn_entry, init_measure_idx=1):
 
         match_measure = re.match(r"=[0-9]+", entry)
         if bool(match_measure):
-            measure_idx = int(entry[1: match_measure.end()])
+            i_measure = int(entry[1: match_measure.end()])
 
         if entry[:3] == "*MM":
-            tp_measure_idx[measure_idx] = int(entry[3:])
+            tp_measure_idx[i_measure] = int(entry[3:])
 
         elif entry[:2] == "*M":
-            ts_measure_idx[measure_idx] = entry[2:]
+            ts_measure_idx[i_measure] = entry[2:]
 
         else:
             continue
@@ -269,9 +269,9 @@ def get_sect_measure_idx(krn_entry):
                 has_note = False
 
             # start_from_0 = (j == i - 1)
-            measure_idx = int(last_entry[1: matched.end()])
+            i_measure = int(last_entry[1: matched.end()])
 
-            sect_measure_idx[sect_str] = {"idx": measure_idx,
+            sect_measure_idx[sect_str] = {"idx": i_measure,
                                           "start_from_0": not has_note}
 
     return sect_measure_idx
@@ -308,16 +308,16 @@ def krn_attr_extract(krn_file):
     matched = re.match(r'=[0-9]+', init_measure_str)
 
     if bool(matched):
-        init_measure_idx = int(init_measure_str[1: matched.end()])
+        init_i_measure = int(init_measure_str[1: matched.end()])
         if has_note:
-            init_measure_idx -= 1
+            init_i_measure -= 1
         # matched = re.match(r'=[0-9]+[-]', init_measure_str)
         # if not bool(matched):
-        #     init_measure_idx -= 1
+        #     init_i_measure -= 1
     else:
-        init_measure_idx = 0
+        init_i_measure = 0
 
-    ts, tp = get_ts_tp(krn_entry, init_measure_idx)
+    ts, tp = get_ts_tp(krn_entry, init_i_measure)
 
     # Get structure pattern
     pattern = get_struct_pattern(krn_entry)
@@ -335,7 +335,7 @@ def krn_attr_extract(krn_file):
 
     first_sect = pattern[0]
     if first_sect not in sect_measure_idx:
-        sect_measure_idx[first_sect] = {"idx": init_measure_idx,
+        sect_measure_idx[first_sect] = {"idx": init_i_measure,
                                         "start_from_0": not has_note}
 
     krn_attr = {"pattern": pattern,
@@ -524,20 +524,20 @@ def event_extract(krn_file, mxml_file=None):
             event = event_part.copy()
             continue
 
-        for idx, attr in event_part.items():
+        for i, attr in event_part.items():
 
-            if idx not in event:
-                Warning(f"Create measure #{idx} in {mxml_file}")
-                event[idx] = {"event": [],
-                              "key": None,
-                              "tempo": None,
-                              "time_signature": None,
-                              "duration": []}
+            if i not in event:
+                Warning(f"Create measure #{i} in {mxml_file}")
+                event[i] = {"event": [],
+                            "key": None,
+                            "tempo": None,
+                            "time_signature": None,
+                            "duration": []}
 
-            event[idx]["event"] = event[idx]["event"] + attr["event"]
-            event[idx]["key"] = event[idx]["key"] or attr["key"]
-            event[idx]["time_signature"] = event[idx]["time_signature"] or attr["time_signature"]
-            event[idx]["duration"] = event[idx]["duration"] or attr["duration"]
+            event[i]["event"] = event[i]["event"] + attr["event"]
+            event[i]["key"] = event[i]["key"] or attr["key"]
+            event[i]["time_signature"] = event[i]["time_signature"] or attr["time_signature"]
+            event[i]["duration"] = event[i]["duration"] or attr["duration"]
 
     sorted_event = {}
     sorted_event["note"] = {}
@@ -546,22 +546,22 @@ def event_extract(krn_file, mxml_file=None):
     tp_shift.append(max(event.keys()) + 1)
     tp_pos = 0
 
-    for idx in sorted(event.keys()):
+    for i in sorted(event.keys()):
 
         # Sort notes and flatten event entries
-        sorted_event["note"][idx] = {}
-        sorted_event["note"][idx]["event"] = flatten_event(event[idx]["event"])
+        sorted_event["note"][i] = {}
+        sorted_event["note"][i]["event"] = flatten_event(event[i]["event"])
 
         # Add time signature
-        sorted_event["note"][idx]["time_signature"] = event[idx]["time_signature"]
+        sorted_event["note"][i]["time_signature"] = event[i]["time_signature"]
 
         # Add tempo
-        if idx >= tp_shift[tp_pos + 1]:
+        if i >= tp_shift[tp_pos + 1]:
             tp_pos += 1
-        sorted_event["note"][idx]["tempo"] = krn_attr["tempo"][tp_shift[tp_pos]]
+        sorted_event["note"][i]["tempo"] = krn_attr["tempo"][tp_shift[tp_pos]]
 
         # Add key
-        sorted_event["note"][idx]["key"] = event[idx]["key"]
+        sorted_event["note"][i]["key"] = event[i]["key"]
 
     sorted_event["struct"] = {}
     sorted_event["struct"]["pattern"] = krn_attr["pattern"]
@@ -569,19 +569,19 @@ def event_extract(krn_file, mxml_file=None):
 
     for sect, pos in krn_attr["attr"].items():
 
-        idx = pos["idx"] - measure_offset
-        measure_ts = event[idx]["time_signature"]
+        i = pos["idx"] - measure_offset
+        measure_ts = event[i]["time_signature"]
         measure_dur = Fraction(measure_ts) * 4
-        measure_split = event[idx]["duration"]
+        measure_split = event[i]["duration"]
 
         if not pos["start_from_0"]:
             start_pos = measure_dur - measure_split[-1]
-            assert start_pos != measure_dur, f"no a bar line found in measure {idx}"
-            assert start_pos != 0, f"section {sect} in measure {idx} should not start from 0"
+            assert start_pos != measure_dur, f"no a bar line found in measure {i}"
+            assert start_pos != 0, f"section {sect} in measure {i} should not start from 0"
         else:
             start_pos = Fraction(0)
 
-        sorted_event["struct"]["attr"][sect] = {"idx": idx,
+        sorted_event["struct"]["attr"][sect] = {"idx": i,
                                                 "onset": f"o-{start_pos}"}
 
     return sorted_event
