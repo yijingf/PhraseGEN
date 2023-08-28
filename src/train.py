@@ -1,4 +1,6 @@
 import os
+import evaluate
+import numpy as np
 import torch.nn as nn
 from transformers import Trainer
 from transformers import TrainingArguments
@@ -6,6 +8,14 @@ from transformers import TrainingArguments
 from midi_tokenizer import base_vocab_size as abs_vocab_size
 from midi_rel_tokenizer import base_vocab_size as rel_vocab_size
 from data_loader import MIDIDataset, MIDIDataCollator
+
+metric = evaluate.load("accuracy")
+
+
+def compute_metrics(eval_preds):
+    logits, labels = eval_preds
+    predictions = np.argmax(logits, axis=-1)
+    return metric.compute(predictions=predictions, references=labels)
 
 
 def build_model(model_type='perceiverAR', max_len=1024, from_pretrained=False, token_type='abs'):
@@ -80,6 +90,13 @@ def build_model(model_type='perceiverAR', max_len=1024, from_pretrained=False, t
                                      n_layer=12)
             model = TransfoXLLMHeadModel(config)
 
+    elif model == 'bert-nsp':
+        from transformers import BertConfig, BertForNextSentencePrediction
+        vocab_size = vocab_size + 3  # cls, sep, mask # Todo: fix this in data loader!
+        config = BertConfig(vocab_size=vocab_size,
+                            max_position_embeddings=max_len)
+        model = BertForNextSentencePrediction(config)
+
     else:
         raise ValueError(f"Unknown pretrained model type: {model_type}")
 
@@ -104,14 +121,22 @@ def main(train_path, eval_path, max_len=1024, q_len=512, mask_pad=True,
                         from_pretrained=from_pretrained)
 
     # Load Dataset
-    train_dataset = MIDIDataset(
-        train_path, max_len=max_len, reverse=reverse_token)
-    eval_dataset = MIDIDataset(
-        eval_path, max_len=max_len, reverse=reverse_token)
+    if model_type == 'bert-nsp':
+        from data_loader import MIDINSPDataset
+        train_dataset = MIDINSPDataset(train_path)
+        eval_dataset = MIDINSPDataset(eval_path)
+    else:
+        train_dataset = MIDIDataset(
+            train_path, max_len=max_len, reverse=reverse_token)
+        eval_dataset = MIDIDataset(
+            eval_path, max_len=max_len, reverse=reverse_token)
 
     if model_type == 'perceiverAR':
         data_collator = MIDIDataCollator(
             q_len=q_len, max_len=max_len, pad_to_max_len=True, align_right=True, mask_pad=mask_pad)
+    elif model_type == 'bert-nsp':
+        from data_loader import MIDINSPDataCollator
+        data_collator = MIDINSPDataCollator()
     else:
         data_collator = MIDIDataCollator(max_len=max_len, mask_pad=mask_pad)
 
@@ -139,13 +164,23 @@ def main(train_path, eval_path, max_len=1024, q_len=512, mask_pad=True,
         load_best_model_at_end=True
     )
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        data_collator=data_collator,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset
-    )
+    if model_type == 'bert-nsp':
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            data_collator=data_collator,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            compute_metrics=compute_metrics
+        )
+    else:
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            data_collator=data_collator,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset
+        )
 
     trainer.train(resume_from_checkpoint=checkpoint_path)
     trainer.save_model()

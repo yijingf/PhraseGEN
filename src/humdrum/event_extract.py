@@ -325,7 +325,7 @@ def krn_attr_extract(krn_file):
         # Warning(f"No structure pattern found in {krn_file}")
         pattern = ["A"]
 
-    krn_entry = krn_entry[measure_start_idx + 1:]
+    krn_entry = krn_entry[measure_start_idx:]
 
     # Get measure index corresponds of section onset
     if len(pattern) > 1:
@@ -374,7 +374,18 @@ def part_event_extract(part):
     # measure duration in quarter length
     bar_dur = Fraction(ts.barDuration.quarterLength)
     note_offset = Fraction(measures[0].offset)
-    pos_offset = Fraction(measures[0].quarterLength) - bar_dur
+
+    init_measure_len = Fraction(measures[0].quarterLength)
+
+    if init_measure_len < bar_dur:
+        # In case there is a repetition bar line in the first measure
+        if measures[1].quarterLength < bar_dur:
+            pos_offset = init_measure_len + \
+                Fraction(measures[1].quarterLength) - bar_dur
+        else:
+            pos_offset = Fraction(measures[0].quarterLength) - bar_dur
+    else:
+        pos_offset = Fraction(0)
 
     if pos_offset != 0:
         bar_offset = 0
@@ -588,29 +599,44 @@ def event_extract(krn_file, mxml_file=None):
 
 
 if __name__ == "__main__":
+    import os
+    import json
+    import argparse
+    from glob import glob
+    from tqdm import tqdm
 
-    krn_file = "../../sonata-dataset/krn/beethoven/sonata13-1.krn"
-    # import os
-    # import json
-    # import pandas as pd
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root_dir", dest="root_dir", type=str,
+                        default="../../sonata-dataset/", help="Root directory.")
+    args = parser.parse_args()
 
-    # composers = ["mozart"]
-    # data_dir = "../data/sonata-dataset"
-    # output_dir = os.path.join(data_dir, "events")
-    # os.makedirs(output_dir, exist_ok=True)
+    krn_dir = os.path.join(args.root_dir, "krn")
+    mxml_dir = os.path.join(args.oot_dir, "mxml")
+    event_dir = os.path.join(args.root_dir, "event")
 
-    # for composer in composers:
-    #     df = pd.read_csv(os.path.join(data_dir, f"{composer}.csv"))
-    #     os.makedirs(os.path.join(output_dir, composer), exist_ok=True)
+    composers = os.listdir(krn_dir)
+    for composer in composers:  # 'mozart', 'haydn', 'beethoven', 'scarlatti'
 
-    #     for _, row in df.iterrows():
-    #         prefix = row["filename"]
-    #         krn_file = os.path.join(data_dir, "krn", composer, f"{prefix}.krn")
-    #         event_file = os.path.join(output_dir, composer, f"{prefix}.json")
+        print(composer)
+        os.makedirs(os.path.join(event_dir, composer), exist_ok=True)
 
-    #         try:
-    #             event = krn_event_extract(krn_file)
-    #             with open(event_file, "w") as f:
-    #                 json.dump(event, f)
-    #         except:
-    #             print(f"Event extraction failed: {krn_file}.")
+        krn_files = glob(os.path.join(krn_dir, composer, "*.krn"))
+
+        for krn_file in tqdm(krn_files):
+
+            basename = os.path.basename(krn_file).split(".")[0]
+            mxml_file = os.path.join(mxml_dir, composer, f"{basename}.xml")
+            event_file = os.path.join(event_dir, composer, f"{basename}.json")
+
+            try:
+                # Extract event from krn/mxml file
+                if not os.path.exists(event_file):
+                    sect_event = event_extract(krn_file, mxml_file)
+                    with open(event_file, "w") as f:
+                        json.dump(sect_event, f)
+                else:
+                    with open(event_file) as f:
+                        sect_event = json.load(f)
+
+            except:
+                print(f"Failed. {krn_file}")

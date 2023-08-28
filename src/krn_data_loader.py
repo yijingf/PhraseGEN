@@ -105,13 +105,12 @@ class KrnDataCollator():
     """
 
     def __init__(self, pad_id=0, q_len=None, max_len=256,
-                 pad_to_max_len=False, align_right=False, mask_pad=False):
+                 pad_to_max_len=False, align_right=False):
         self.q_len = q_len
         self.pad_id = pad_id
         self.max_len = max_len
         self.pad_to_max_len = pad_to_max_len
         self.align_right = align_right
-        self.mask_pad = mask_pad
 
     def __post_init__(self):
         pass
@@ -127,10 +126,10 @@ class KrnDataCollator():
             labels = labels[:, -self.q_len:]
             batch["q_len"] = self.q_len
 
-        if self.mask_pad:
-            key_padding_mask = torch.ones_like(labels)
-            key_padding_mask[labels == self.pad_id] = 0
-            batch['key_padding_mask'] = key_padding_mask
+        # if self.mask_pad:
+        #     key_padding_mask = torch.ones_like(labels)
+        #     key_padding_mask[labels == self.pad_id] = 0
+        #     batch['key_padding_mask'] = key_padding_mask
 
         labels[labels == self.pad_id] = -100
         # nn.CrossEntropy ignore pad_id by default
@@ -146,7 +145,7 @@ class KrnDataset(Dataset):
     def __init__(self, token_path, max_len=256, shuffle=True):
 
         with open(token_path) as f:
-            tokens = json.load(f)['token_ids']
+            tokens = json.load(f)
 
         self.tokens = []
         for phrase in tokens:
@@ -179,7 +178,7 @@ class MaskedKrnDataset(Dataset):
     def __init__(self, token_path, seq_len=512, shuffle=True):
 
         with open(token_path) as f:
-            tokens = json.load(f)['token_ids']
+            tokens = json.load(f)
 
         tokens = [i for i in tokens if len(i['input_ids']) <= seq_len]
         self.input_tokens = [i['input_ids'] for i in tokens]

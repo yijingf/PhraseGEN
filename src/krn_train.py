@@ -8,7 +8,7 @@ from krn_data_loader import KrnDataCollator, KrnDataset
 from krn_data_loader import MaskedKrnDataCollator, MaskedKrnDataset
 
 
-def build_model(vocab_size, model_type='perceiverAR', max_len=1024, pad_id=0):
+def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
 
     if model_type == 'music-transformer':
         from models import MusicTransformer, MusicTransformerConfig
@@ -65,8 +65,8 @@ def build_model(vocab_size, model_type='perceiverAR', max_len=1024, pad_id=0):
     return model
 
 
-def main(train_path, eval_path, base_vocab_file, max_len=256, mask_pad=True,
-         batch_size=32, n_epochs=100, model_type='music-transformer',
+def main(train_path, eval_path, base_vocab_file, max_len=256, bar_pad=False,
+         batch_size=32, n_epochs=100, model_type='mass',
          model_dir="../models", checkpoint_path=None):
 
     with open(base_vocab_file) as f:
@@ -76,7 +76,7 @@ def main(train_path, eval_path, base_vocab_file, max_len=256, mask_pad=True,
     if model_type not in ['bert', 'roberta', 'mass']:
         train_dataset = KrnDataset(train_path, max_len=max_len)
         eval_dataset = KrnDataset(eval_path, max_len=max_len)
-        data_collator = KrnDataCollator(max_len=max_len, mask_pad=mask_pad)
+        data_collator = KrnDataCollator(max_len=max_len)
         tokenizer = BaseTokenizer()
         tokenizer.train(base_vocab)
     else:
@@ -112,8 +112,11 @@ def main(train_path, eval_path, base_vocab_file, max_len=256, mask_pad=True,
 
     # Setup Training Args
     os.makedirs(model_dir, exist_ok=True)
-    model_output_dir = os.path.join(model_dir,
-                                    f"{model_type}-krn-{max_len}")
+    if bar_pad:
+        prefix = f"{model_type}-pad"
+    else:
+        prefix = f"{model_type}"
+    model_output_dir = os.path.join(model_dir, f"{prefix}-krn-{max_len}")
 
     training_args = TrainingArguments(
         output_dir=model_output_dir,  # The output directory
@@ -157,10 +160,4 @@ if __name__ == "__main__":
         with open(input_args.arg_file) as f:
             args = json.load(f)
 
-    main(args["train_path"],
-         args["eval_path"],
-         args["base_vocab_file"],
-         n_epochs=args["n_epochs"],
-         model_type=args["model_type"],
-         batch_size=args["batch_size"],
-         max_len=args["max_len"])
+    main(**args)

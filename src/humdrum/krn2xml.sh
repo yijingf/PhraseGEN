@@ -1,9 +1,9 @@
 #!/bin/bash
 
-root_dir="../../sonata-dataset"
+root_dir=$1
+# root_dir="../../sonata-dataset"
 
-# declare -a composers=("mozart" "beethoven" "haydn" )
-declare -a composers=("scarlatti")
+declare -a composers=("mozart" "beethoven" "haydn" "scarlatti")
 
 for composer in "${composers[@]}"; do
     echo ""
