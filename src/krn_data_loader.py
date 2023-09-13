@@ -5,30 +5,105 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
-def _torch_mask_collate_batch(examples, pad_id=0):
+def _torch_mask_collate_batch(examples, pad_id=0, mask_id=4, is_mass=True, pred_masked_only=False):
+    tokens, mask_idx = [], []
+    for i, e in enumerate(examples):
+        if len(e[1]):
+            tokens.append(e[0])
+            mask_idx.append(e[1])
 
     if isinstance(examples[0][0], (list, tuple, np.ndarray)):
-        inputs = [torch.tensor(e[0], dtype=torch.long) for e in examples]
-        labels = [torch.tensor(e[1], dtype=torch.long) for e in examples]
+        tokens = [torch.tensor(e, dtype=torch.long) for e in tokens]
 
-    length_of_first = inputs[0].size(0)
+    max_len = max(int(x.size(0)) for x in tokens)
+    input_result = tokens[0].new_full([len(tokens), max_len], pad_id)
+    label_result = tokens[0].new_full([len(tokens), max_len], pad_id)
+    decoder_input = tokens[0].new_full([len(tokens), max_len], mask_id)
 
-    # Check if padding is necessary.
-    are_tensors_same_length = all(
-        x.size(0) == length_of_first for x in inputs)
-    if are_tensors_same_length:
-        return torch.stack(inputs, dim=0), torch.stack(labels, dim=0)
+    for i in range(len(tokens)):
+        seq_len = tokens[i].shape[0]
+        input = tokens[i].clone()
+        input[mask_idx[i]] = mask_id
+        input_result[i, :seq_len] = input
 
-    max_len = max(int(x.size(0)) for x in inputs)
-    input_result = inputs[0].new_full([len(examples), max_len], pad_id)
-    label_result = labels[0].new_full([len(examples), max_len], pad_id)
+        if is_mass:
+            decoder_input[i, mask_idx[i]] = tokens[i][mask_idx[i]]
 
-    for i in range(len(examples)):
-        seq_len = inputs[i].shape[0]
-        input_result[i, :seq_len] = inputs[i]
-        label_result[i, :seq_len] = labels[i]
+        if pred_masked_only:
+            label_result[i, mask_idx[i]] = tokens[i][mask_idx[i]]
+        else:
+            label_result[i, :seq_len] = tokens[i]
 
-    return input_result, label_result
+    pad = torch.tensor([[mask_id] for _ in range(len(tokens))],
+                       dtype=torch.long)
+    decoder_input = torch.cat((pad, decoder_input[:, :-1]), 1)
+
+    return input_result, decoder_input, label_result
+
+
+class MaskedKrnDataCollator():
+    """
+    Data collator
+    """
+
+    def __init__(self, mask_id=4, pad_id=0, is_mass=False, pred_masked_only=False):
+
+        self.mask_id = mask_id
+        self.pad_id = pad_id
+        self.is_mass = is_mass
+        self.pred_masked_only = pred_masked_only
+
+    def __post_init__(self):
+        pass
+
+    def __call__(self, examples):
+        # Handle dict or lists with proper padding and conversion to tensor.
+
+        inputs, decoder_inputs, labels = _torch_mask_collate_batch(examples,
+                                                                   pad_id=self.pad_id,
+                                                                   mask_id=self.mask_id,
+                                                                   is_mass=self.is_mass,
+                                                                   pred_masked_only=self.pred_masked_only)
+
+        batch = {"input_ids": inputs}
+
+        if self.is_mass:
+            # decoder_input_ids = torch.ones_like(labels)
+            # decoder_input_ids[:, 0] = self.mask_id
+            # decoder_input_ids[:, 1:] = labels[:, :-1]
+            batch['decoder_input_ids'] = decoder_inputs
+
+        labels[labels == self.pad_id] = -100
+        # nn.CrossEntropy ignore pad_id by default
+        batch["labels"] = labels
+
+        return batch
+
+
+# def _torch_mask_collate_batch_old(examples, pad_id=0):
+
+#     if isinstance(examples[0][0], (list, tuple, np.ndarray)):
+#         inputs = [torch.tensor(e[0], dtype=torch.long) for e in examples]
+#         labels = [torch.tensor(e[1], dtype=torch.long) for e in examples]
+
+#     length_of_first = inputs[0].size(0)
+
+#     # Check if padding is necessary.
+#     are_tensors_same_length = all(
+#         x.size(0) == length_of_first for x in inputs)
+#     if are_tensors_same_length:
+#         return torch.stack(inputs, dim=0), torch.stack(labels, dim=0)
+
+#     max_len = max(int(x.size(0)) for x in inputs)
+#     input_result = inputs[0].new_full([len(examples), max_len], pad_id)
+#     label_result = labels[0].new_full([len(examples), max_len], pad_id)
+
+#     for i in range(len(examples)):
+#         seq_len = inputs[i].shape[0]
+#         input_result[i, :seq_len] = inputs[i]
+#         label_result[i, :seq_len] = labels[i]
+
+#     return input_result, label_result
 
 
 def _torch_collate_batch(examples, pad_id=0,
@@ -63,40 +138,40 @@ def _torch_collate_batch(examples, pad_id=0,
     return result
 
 
-class MaskedKrnDataCollator():
-    """
-    Data collator
-    """
+# class MaskedKrnDataCollator_Old():
+#     """
+#     Data collator
+#     """
 
-    def __init__(self, mask_id=4, pad_id=0, is_mass=False):
+#     def __init__(self, mask_id=4, pad_id=0, is_mass=False):
 
-        self.mask_id = mask_id
-        self.pad_id = pad_id
-        self.is_mass = is_mass
+#         self.mask_id = mask_id
+#         self.pad_id = pad_id
+#         self.is_mass = is_mass
 
-    def __post_init__(self):
-        pass
+#     def __post_init__(self):
+#         pass
 
-    def __call__(self, examples):
-        # Handle dict or lists with proper padding and conversion to tensor.
+#     def __call__(self, examples):
+#         # Handle dict or lists with proper padding and conversion to tensor.
 
-        input_ids, labels = _torch_mask_collate_batch(examples,
-                                                      pad_id=self.pad_id)
+#         input_ids, labels = _torch_mask_collate_batch_old(examples,
+#                                                           pad_id=self.pad_id)
 
-        batch = {"input_ids": input_ids}
+#         batch = {"input_ids": input_ids}
 
-        if self.is_mass:
-            decoder_input_ids = torch.ones_like(labels)
-            decoder_input_ids[:, 0] = self.mask_id
-            decoder_input_ids[:, 1:] = labels[:, :-1]
-            batch['decoder_input_ids'] = decoder_input_ids
+#         if self.is_mass:
+#             decoder_input_ids = torch.ones_like(labels)
+#             decoder_input_ids[:, 0] = self.mask_id
+#             decoder_input_ids[:, 1:] = labels[:, :-1]
+#             batch['decoder_input_ids'] = decoder_input_ids
 
-        labels[labels == self.pad_id] = -100
-        labels[labels == self.mask_id] = -100
-        # nn.CrossEntropy ignore pad_id by default
-        batch["labels"] = labels
+#         labels[labels == self.pad_id] = -100
+#         labels[labels == self.mask_id] = -100
+#         # nn.CrossEntropy ignore pad_id by default
+#         batch["labels"] = labels
 
-        return batch
+#         return batch
 
 
 class KrnDataCollator():
@@ -162,7 +237,7 @@ class KrnDataset(Dataset):
         # self.tokens = [i[: max_len] for i in self.tokens]
 
     def __getitem__(self, index):
-        """Return 
+        """Return
 
         Args:
             index (int): index of entry
@@ -175,30 +250,78 @@ class KrnDataset(Dataset):
 
 
 class MaskedKrnDataset(Dataset):
-    def __init__(self, token_path, seq_len=512, shuffle=True):
+    def __init__(self, token_path, seq_len=512, shuffle=True, mask_mode='center'):
 
         with open(token_path) as f:
-            tokens = json.load(f)
+            phrases = json.load(f)
 
-        tokens = [i for i in tokens if len(i['input_ids']) <= seq_len]
-        self.input_tokens = [i['input_ids'] for i in tokens]
-        self.labels = [i['labels'] for i in tokens]
+        phrases = [i for i in phrases if len(i['token_ids']) <= seq_len]
+
+        self.input_tokens = [i['token_ids'] for i in phrases]
+        if mask_mode == 'center':
+            self.mask_idx = [i['center_mask_idx'] for i in phrases]
+        elif mask_mode == 'rand':
+            self.mask_idx = [i['rand_mask_idx'] for i in phrases]
+        elif mask_mode == 'mix':
+            self.input_tokens += self.input_tokens
+            self.mask_idx = [i['rand_mask_idx']
+                             for i in phrases] + [i['center_mask_idx'] for i in phrases]
+        else:
+            raise ValueError("Unknown masking type.")
 
         if shuffle:
-            idx = list(range(len(tokens)))
+            idx = list(range(len(self.input_tokens)))
             random.shuffle(idx)
             self.input_tokens = [self.input_tokens[i] for i in idx]
-            self.labels = [self.labels[i] for i in idx]
+            self.mask_idx = [self.mask_idx[i] for i in idx]
 
     def __getitem__(self, index):
-        """Return 
+        """Return
 
         Args:
             index (int): index of entry
         """
-        input_ids = self.input_tokens[index]
-        labels = self.labels[index]
-        return input_ids, labels
+        token_ids = self.input_tokens[index]
+        mask_idx = self.mask_idx[index]
+        return token_ids, mask_idx
+
+        # input_ids = self.input_tokens[index]
+        # labels = self.labels[index]
+        # return input_ids, labels
 
     def __len__(self):
         return len(self.input_tokens)
+
+
+# class MaskedKrnDataset(Dataset):
+#     def __init__(self, token_path, seq_len=512, shuffle=True):
+
+#         with open(token_path) as f:
+#             tokens = json.load(f)
+
+#         tokens = [i for i in tokens if len(i['input_ids']) <= seq_len]
+#         self.input_tokens = [i['input_ids'] for i in tokens]
+#         self.labels = [i['labels'] for i in tokens]
+
+#         if shuffle:
+#             idx = list(range(len(tokens)))
+#             random.shuffle(idx)
+#             self.input_tokens = [self.input_tokens[i] for i in idx]
+#             self.labels = [self.labels[i] for i in idx]
+
+#     def __getitem__(self, index):
+#         """Return
+
+#         Args:
+#             index (int): index of entry
+#         """
+#         input_ids = self.data[index]['input_ids']
+#         mask_idx = self.data[index]['mask_idx']
+#         return input_ids, mask_idx
+
+#         # input_ids = self.input_tokens[index]
+#         # labels = self.labels[index]
+#         # return input_ids, labels
+
+#     def __len__(self):
+#         return len(self.input_tokens)

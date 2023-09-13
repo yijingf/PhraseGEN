@@ -6,7 +6,7 @@ import pandas as pd
 from glob import glob
 from collections import Counter
 
-from humdrum.utils import has_irregular_token, get_time
+from humdrum.common import token2v
 from krn_tokenizer import BertTokenizer
 
 
@@ -75,54 +75,86 @@ def make_dataset(tokenizer, df, data_dir, split='train', seq_len=256):
     return dataset
 
 
-def mask_phrase(phrase, mask_mode='random', max_measure_len=64, mask_ratio=0.8,
-                bar_eos_token='sep', eos_token='eos', pad_bar=True):
+def mask_phrase(phrase, max_measure_len=64, mask_ratio=0.8,
+                bar_eos_token='sep', eos_token='eos', pad_bar=True,
+                rand_mask_measure=None, center_mask_measure=None):
 
     tokens = [phrase['time_signature'], phrase['tempo']]
 
     n_measure = len(phrase['note'])
+    if n_measure < 2:
+        return None, None, None
 
     # Randomly mask out measures
-    if mask_mode == 'random':
+    if rand_mask_measure is None:
         n_masked_meaure = int(mask_ratio * n_measure)
-        masked_i_measures = random.sample(range(n_measure), n_masked_meaure)
+        rand_mask_measure = random.sample(range(n_measure), n_masked_meaure)
+
+    if isinstance(rand_mask_measure, list):
+        rand_mask_measure = np.array(sorted(rand_mask_measure))
 
     # Mask measures in the middle
-    elif mask_mode == 'center':
+    if center_mask_measure is None:
         if n_measure < 3:
-            return [], []
+            center_mask_measure = np.array([])
         else:
             # Mask around 50% bars in the middle of a sequence
             n_mask = int(n_measure / 2)
             mask_st_i = round(n_measure / 2 / 2)
-            masked_i_measures = list(range(mask_st_i, mask_st_i + n_mask))
+            center_mask_measure = np.arange(mask_st_i, mask_st_i + n_mask)
 
-    masked_token_idx = []
-    for i, measure in enumerate(phrase['note']):
+    if isinstance(center_mask_measure, list):
+        center_mask_measure = np.array(sorted(center_mask_measure))
 
-        notes = measure
-        if i in masked_i_measures:
-            st_idx = len(tokens)
+    if pad_bar:
+        tokens += phrase['note'][0] + ['bar']
+        measure_len = [0, len(phrase['note'][0]) + 1]
 
-            if pad_bar:
-                if len(notes) < max_measure_len:
-                    pad_len = max_measure_len - len(notes)
-                    notes += [bar_eos_token for _ in range(pad_len)]
+        for i in range(1, n_measure - 1):
+            notes = phrase['note'][i]
 
-            ed_idx = st_idx + len(notes)
-            masked_token_idx += list(range(st_idx, ed_idx + 1))
+            pad_len = max_measure_len - len(notes)
+            if len(notes) < max_measure_len:
+                notes += [bar_eos_token for _ in range(pad_len)]
 
-        tokens += notes
-        tokens += ['bar']
+            tokens += notes
+            tokens += ['bar']
+            measure_len += [len(notes) + 1]
 
-    if not pad_bar:
+        tokens += phrase['note'][-1]
         tokens += [eos_token]
+        measure_len += [len(phrase['note'][-1]) + 1]
 
-    return tokens, masked_token_idx
+    else:
+        tokens += [token for bar in phrase['note'] for token in bar + ['bar']]
+        tokens[-1] = eos_token
+
+        measure_len = np.array([0] + [len(measure)
+                               for measure in phrase['note']])
+        measure_len += np.ones(n_measure + 1, dtype=int)
+        measure_len[0] = 0
+
+    idx = np.cumsum(measure_len)
+    idx += 2
+
+    if len(center_mask_measure):
+        center_st_idx = idx[center_mask_measure]
+        center_ed_idx = idx[center_mask_measure + 1]
+        center_mask_idx = [j for i in range(len(center_mask_measure))
+                           for j in list(range(center_st_idx[i], center_ed_idx[i]))]
+    else:
+        center_mask_idx = []
+
+    rand_st_idx = idx[rand_mask_measure]
+    rand_ed_idx = idx[rand_mask_measure + 1]
+    rand_mask_idx = [j for i in range(len(rand_mask_measure))
+                     for j in list(range(rand_st_idx[i], rand_ed_idx[i]))]
+
+    return tokens, center_mask_idx, rand_mask_idx
 
 
 def make_masked_dataset(tokenizer, df, data_dir, split,
-                        seq_len=512, mask_mode='random', mask_ratio=0.75, pad_bar=True):
+                        seq_len=512, mask_ratio=0.75, pad_bar=True):
 
     dataset = []
 
@@ -134,33 +166,24 @@ def make_masked_dataset(tokenizer, df, data_dir, split,
 
         for phrase in phrases:
 
-            tokens, mask_idx = mask_phrase(phrase,
-                                           mask_mode=mask_mode,
-                                           mask_ratio=mask_ratio,
-                                           pad_bar=pad_bar,
-                                           bar_eos_token=tokenizer.sep_token,
-                                           eos_token=tokenizer.eos_token)
+            tokens, center_mask_idx, rand_mask_idx = mask_phrase(phrase,
+                                                                 mask_ratio=mask_ratio,
+                                                                 pad_bar=pad_bar,
+                                                                 bar_eos_token=tokenizer.sep_token,
+                                                                 eos_token=tokenizer.eos_token)
 
-            if not len(mask_idx):
+            if tokens is None:
                 continue
 
-            if has_irregular_token(tokens, tokenizer.vocab):
+            if tokenizer.has_irregular_token(tokens):
                 continue
 
             if len(tokens) >= seq_len:  # roberta pos id starts from 1
                 continue
 
-            ids = np.array(tokenizer.convert_tokens_to_ids(tokens))
-
-            input_ids = ids.copy()
-            input_ids[mask_idx] = tokenizer.mask_id
-
-            labels = np.array([tokenizer.mask_id for _ in range(len(ids))])
-            labels[mask_idx] = ids[mask_idx]
-
-            entry = {"input_ids": input_ids.tolist(),
-                     "labels": labels.tolist()}
-
+            entry = {"token_ids": tokenizer.convert_tokens_to_ids(tokens),
+                     "center_mask_idx": center_mask_idx,
+                     "rand_mask_idx": rand_mask_idx}
             dataset.append(entry)
 
     return dataset
@@ -233,7 +256,7 @@ def get_vocab(seg_dir):
     tokens = list(vocab_cnt.keys())
     for token in tokens:
         if token[0] in ['o', 'd']:
-            div = get_time(token).denominator
+            div = token2v(token).denominator
 
             if not div % 5 or not div % 11:
                 vocab_cnt.pop(token)
@@ -247,7 +270,7 @@ def get_vocab(seg_dir):
     return vocab
 
 
-def main(root_dir, split_ratio, seq_len=512, masked=False, mask_mode='center', pad_bar=False):
+def main(root_dir, split_ratio, seq_len=512, masked=False, pad_bar=False):
 
     seg_dir = os.path.join(root_dir, "segment")
 
@@ -285,11 +308,11 @@ def main(root_dir, split_ratio, seq_len=512, masked=False, mask_mode='center', p
     if masked:
         for split in splits:
             datasets[split] = make_masked_dataset(tokenizer, df, seg_dir,
-                                                  split=split, seq_len=seq_len, mask_mode=mask_mode, pad_bar=pad_bar)
+                                                  split=split, seq_len=seq_len, pad_bar=pad_bar)
             if pad_bar:
-                fname = f"{split}_{seq_len}_{mask_mode}_pad.json"
+                fname = f"{split}_{seq_len}_masked_pad.json"
             else:
-                fname = f"{split}_{seq_len}_{mask_mode}.json"
+                fname = f"{split}_{seq_len}_masked.json"
             fnames[split] = os.path.join(out_dir, fname)
 
     else:
@@ -317,9 +340,6 @@ if __name__ == "__main__":
                         default=512, help="Max sequence length. Default to 512.")
     parser.add_argument("--masked", dest="masked",
                         action="store_false", help="Whether to apply masking. Default to False.")
-    parser.add_argument("--mask_mode", dest="mask_mode", type=str,
-                        default="center", help="Masking mode, center/random. Default to center.")
 
     args = parser.parse_args()
-
     main(args.root_dir, args.split_ratio, args.seq_len, args.masked)

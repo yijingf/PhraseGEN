@@ -1,4 +1,4 @@
-"""Extract notes (grouped by measures), tempo, time signature from humdrum file, and output a dictionary that contains following attributes:
+"""Extract notes (grouped by measures), tempo, time signature from kern file or music xml, and output a dictionary that contains following attributes:
 {
     "note": {
         `measure_id`:{
@@ -21,7 +21,9 @@ The note onset and duration are scaled by quarter note.
 Humdrum file could be loaded
 (1) directly as .krn file
 (2) as .xml converted by `hum2xml`.
-Method (2) is recommended because music21 is not very reliable handling .krn file.
+Method (2) is recommended because music21 has various unexpected issues when parsing .krn file.
+
+NOTE: The current version has issue parsing repetition sign when the first volta is not complete. The only fix is to append rest note to the incomplete volta. See `../../sonata-dataset/README.md` for more details.
 
 """
 import re
@@ -155,15 +157,15 @@ def get_key(measure, mode="major"):
 
 
 def check_tempo_shift(event, attr, measure_offset=0):
-    """Check if tempo extracted from .xml is consistent with .krn
+    """Check if tempo extracted from .xml is consistent with that from .krn
 
     Args:
-        event (dict): _description_
-        attr (dict): _description_
+        event (dict): Note event parsed from .xml file.
+        attr (dict): Attributes extracted from .krn file.
     """
 
-    max_xml_measure = max(event.keys())
-    min_xml_measure = min(event.keys())
+    max_xml_measure = max(event)
+    min_xml_measure = min(event)
 
     ts_shift = sorted(attr['time_signature'].keys())
     ts_shift.append(max_xml_measure + measure_offset + 1)
@@ -179,7 +181,7 @@ def check_tempo_shift(event, attr, measure_offset=0):
     return
 
 
-def get_ts_tp(krn_entry, init_i_measure=1):
+def parse_ts_tp(krn_entry, init_i_measure=1):
     """Get time signature and tempo from humdrum entry.
 
     Args:
@@ -317,7 +319,7 @@ def krn_attr_extract(krn_file):
     else:
         init_i_measure = 0
 
-    ts, tp = get_ts_tp(krn_entry, init_i_measure)
+    ts, tp = parse_ts_tp(krn_entry, init_i_measure)
 
     # Get structure pattern
     pattern = get_struct_pattern(krn_entry)
@@ -403,7 +405,7 @@ def part_event_extract(part):
             ts = measure.timeSignature
             bar_dur = Fraction(ts.barDuration.quarterLength)
 
-            # NOTE: measure.number is not reliable
+            # NOTE: `measure.number` is not reliable because `humlib` splits measure with repetition into two measures.
             # If time signature changes, starting a new bar anyway
             bar = last_bar + 1
             note_offset = Fraction(measure.offset)
@@ -507,7 +509,7 @@ def part_event_extract(part):
     return event
 
 
-def event_extract(krn_file, mxml_file=None):
+def event_extract(krn_file, mxml_file=None, sanity_check=True):
 
     # Load music scores from .xml or .krn
     if not mxml_file:
@@ -528,13 +530,15 @@ def event_extract(krn_file, mxml_file=None):
         measure_offset = krn_measure_offset - min(event_part.keys())
 
         # Sanity check
-        check_tempo_shift(event_part, krn_attr, measure_offset)
+        if sanity_check:
+            check_tempo_shift(event_part, krn_attr, measure_offset)
 
         # Update events
         if not len(event):
             event = event_part.copy()
             continue
 
+        # Merge left/right hand
         for i, attr in event_part.items():
 
             if i not in event:
@@ -550,6 +554,7 @@ def event_extract(krn_file, mxml_file=None):
             event[i]["time_signature"] = event[i]["time_signature"] or attr["time_signature"]
             event[i]["duration"] = event[i]["duration"] or attr["duration"]
 
+    # Postprocess after event extraction
     sorted_event = {}
     sorted_event["note"] = {}
 
@@ -585,6 +590,7 @@ def event_extract(krn_file, mxml_file=None):
         measure_dur = Fraction(measure_ts) * 4
         measure_split = event[i]["duration"]
 
+        # Sanity check
         if not pos["start_from_0"]:
             start_pos = measure_dur - measure_split[-1]
             assert start_pos != measure_dur, f"no a bar line found in measure {i}"

@@ -1,46 +1,7 @@
 import json
 from fractions import Fraction
-from utils import normalize_ts_tp, normalize_event, token2v
-
-
-def remove_repeat(pattern):
-    new_pattern = []
-    last_sect = ''
-    for sect in pattern:
-        if sect != last_sect:
-            new_pattern.append(sect)
-        last_sect = sect
-    return new_pattern
-
-
-def load_event(fname):
-    with open(fname) as f:
-        event = json.load(f)
-
-    note_event = {}
-    for i in event['note']:
-        note_event[int(i)] = event['note'][i].copy()
-
-    struct = event['struct']
-
-    return note_event, struct
-
-
-def sort_section_name(norep_pattern):
-    """Sort section names and remove repetition
-
-    Args:
-        norep_pattern (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    sorted_sects = []
-
-    for sect in norep_pattern:
-        if sect not in sorted_sects:
-            sorted_sects.append(sect)
-    return sorted_sects
+from common import normalize_ts_tp, normalize_event, token2v
+from common import remove_repeat, load_event, get_sub_sect_event, concat_event
 
 
 def merge_section_name(pattern):
@@ -68,70 +29,6 @@ def merge_section_name(pattern):
         merged_sect_name.append(merged_sect)
 
     return merged_sect_name
-
-
-def merge_section(sect_event, sects):
-    """Merge section events
-
-    Args:
-        sect_event (_type_): _description_
-        sects (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    merged_event = {}
-    i_measure = 0
-
-    for sect in sects:
-
-        min_i_measure = min(sect_event[sect])
-        max_i_measure = max(sect_event[sect])
-
-        for i in range(min_i_measure, max_i_measure + 1):
-            merged_event[i_measure] = sect_event[sect][i].copy()
-            i_measure += 1
-
-    return merged_event
-
-
-def trim_section(measures, start=(0, 0), end=(0, 0)):
-    """Trim a list of measures given the start/end time.
-
-    Args:
-        event (list): _description_
-        start (tuple, optional): (measure index, beat/quarter note within a measure). Defaults to (0, 0).
-        end (tuple, optional): _description_. Defaults to (0, 0).
-
-    Returns:
-        _type_: _description_
-    """
-    i_st, offset_st = start
-    i_ed, offset_ed = end
-
-    seg_measures = {}
-    for i_measure in range(i_st, i_ed):
-        seg_measures[i_measure] = measures[i_measure].copy()
-
-    # Add notes from last measure
-    if offset_ed > 0:
-        for i_token, token in enumerate(measures[i_ed]['event']):
-            if token[0] == 'o':
-                if token2v(token) >= offset_ed:
-                    break
-
-        seg_measures[i_ed] = measures[i_ed].copy()
-        seg_measures[i_ed]['event'] = seg_measures[i_ed]['event'][:i_token]
-
-    # Remove redundant notes from the first measure
-    if offset_st > 0:
-        for i_token, token in enumerate(measures[i_st]['event']):
-            if token[0] == 'o':
-                if token2v(token) >= offset_st:
-                    break
-
-        seg_measures[i_st]['event'] = seg_measures[i_st]['event'][i_token:]
-    return seg_measures
 
 
 def phrase_segment(measures, max_len_phrase=8, measure_offset=0, phrase_offset=0):
@@ -249,46 +146,27 @@ def phrase_segment(measures, max_len_phrase=8, measure_offset=0, phrase_offset=0
     return phrases
 
 
-def get_events_per_section(event_file):
+def get_sect_event(event_file):
     # Load note event, and structure
     event, struct = load_event(event_file)
 
     # Remove repetition if the section has no first/second volta
     norep_pattern = remove_repeat(struct['pattern'])
 
-    # Sort sections
-    sects = sort_section_name(norep_pattern)
-
-    # Get section onset for segmentation
-    sect_onset = []
-    for sect in sects:
-        sect_onset.append(struct['attr'][sect])
-
-    max_measure_id = max([i for i in event.keys()]) + 1
-    sect_onset.append({"idx": max_measure_id, "onset": "o-0"})
-
-    # Get events for each sub section
-    sub_sect_event = {}
-    for i, v in enumerate(sect_onset[:-1]):
-        sect = sects[i]
-
-        i_st = v['idx']
-        offset_st = token2v(v['onset'])
-
-        i_ed = sect_onset[i + 1]['idx']
-        offset_ed = token2v(sect_onset[i + 1]['onset'])
-
-        sub_sect_event[sect] = trim_section(event,
-                                            start=(i_st, offset_st),
-                                            end=(i_ed, offset_ed))
+    # Sort sub sections by onset
+    onsets = sorted([(i, v) for i, v in struct['attr'].items()],
+                    key=lambda x: x[1]['idx'])
+    sub_sect_event = get_sub_sect_event(event, onsets)
 
     # Merge events within sections such as [A, A1, A, A2]
     merged_pattern = merge_section_name(norep_pattern)
 
     # Get phrases for merged sections
     sect_event = {}
-    for merged_sect in merged_pattern:
-        sect_event[merged_sect[0]] = merge_section(sub_sect_event, merged_sect)
+    for sects in merged_pattern:
+        sect_event[sects[0]] = concat_event(sub_sect_event,
+                                            sects,
+                                            struct['attr'])[0]
 
     return sect_event
 
@@ -298,7 +176,7 @@ def old_segment(sect_event=None, event_file=None, max_len_phrase=8):
     if sect_event is None:
         if event_file is None:
             raise ValueError(f"Invalid file name {event_file}.")
-        sect_event = get_events_per_section(event_file)
+        sect_event = get_sect_event(event_file)
 
     # Get phrases from section
     all_phrases = []
@@ -321,7 +199,7 @@ def segment(sect_event=None, event_file=None, max_len_phrase=8, hop_size=4):
     if sect_event is None:
         if event_file is None:
             raise ValueError(f"Invalid file name {event_file}.")
-        sect_event = get_events_per_section(event_file)
+        sect_event = get_sect_event(event_file)
 
     # Get phrases from section
     all_phrases = []

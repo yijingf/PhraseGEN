@@ -66,7 +66,7 @@ def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
 
 
 def main(train_path, eval_path, base_vocab_file, max_len=256, bar_pad=False,
-         batch_size=32, n_epochs=100, model_type='mass',
+         batch_size=32, n_epochs=100, model_type='mass', pred_masked_only=False, mask_mode='mix',
          model_dir="../models", checkpoint_path=None):
 
     with open(base_vocab_file) as f:
@@ -95,11 +95,14 @@ def main(train_path, eval_path, base_vocab_file, max_len=256, bar_pad=False,
                                                   pad_id=tokenizer.pad_id,)
 
         elif model_type == 'mass':
-            train_dataset = MaskedKrnDataset(train_path, seq_len=max_len)
-            eval_dataset = MaskedKrnDataset(eval_path, seq_len=max_len)
+            train_dataset = MaskedKrnDataset(train_path, seq_len=max_len,
+                                             mask_mode=mask_mode)
+            eval_dataset = MaskedKrnDataset(eval_path, seq_len=max_len,
+                                            mask_mode=mask_mode)
             data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
                                                   pad_id=tokenizer.pad_id,
-                                                  is_mass=True)
+                                                  is_mass=True,
+                                                  pred_masked_only=pred_masked_only)
 
         else:
             raise ValueError('invalid model type')
