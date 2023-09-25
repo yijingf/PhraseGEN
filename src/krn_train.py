@@ -1,11 +1,9 @@
 import os
-import torch.nn as nn
 from transformers import Trainer
 from transformers import TrainingArguments
 
-from krn_tokenizer import BaseTokenizer, BertTokenizer
-from krn_data_loader import KrnDataCollator, KrnDataset
-from krn_data_loader import MaskedKrnDataCollator, MaskedKrnDataset
+from krn_tokenizer import BertTokenizer
+from krn_data_loader import KrnDataset, KrnDataCollator, MaskedKrnDataCollator
 
 
 def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
@@ -14,8 +12,8 @@ def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
         from models import MusicTransformer, MusicTransformerConfig
         config = MusicTransformerConfig(vocab_size=vocab_size,
                                         n_positions=max_len,
-                                        n_head=4,
-                                        n_layer=4,
+                                        n_head=8,
+                                        n_layer=8,
                                         pdrop=.1,)
         model = MusicTransformer(config)
 
@@ -47,12 +45,14 @@ def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
         config_encoder = BertConfig(vocab_size=vocab_size,
                                     num_hidden_layers=4,
                                     num_attention_heads=8,
-                                    intermediate_size=1024)
+                                    intermediate_size=1024,
+                                    position_embedding_type='relative_key_query')
 
         config_decoder = BertConfig(vocab_size=vocab_size,
                                     num_hidden_layers=4,
                                     num_attention_heads=8,
-                                    intermediate_size=1024)
+                                    intermediate_size=1024,
+                                    position_embedding_type='relative_key_query')
 
         config = EncoderDecoderConfig.from_encoder_decoder_configs(config_encoder,
                                                                    config_decoder)
@@ -71,41 +71,39 @@ def main(train_path, eval_path, base_vocab_file, max_len=256, bar_pad=False,
 
     with open(base_vocab_file) as f:
         base_vocab = f.read().splitlines()
+    tokenizer = BertTokenizer()
+    tokenizer.train(base_vocab)
 
     # Load Dataset
-    if model_type not in ['bert', 'roberta', 'mass']:
-        train_dataset = KrnDataset(train_path, max_len=max_len)
-        eval_dataset = KrnDataset(eval_path, max_len=max_len)
+    if model_type not in ['bert', 'roberta', 'mass']:  # non-masking model
+        train_dataset = KrnDataset(train_path, seq_len=max_len, mask_mode=None)
+        eval_dataset = KrnDataset(eval_path, seq_len=max_len, mask_mode=None)
         data_collator = KrnDataCollator(max_len=max_len)
-        tokenizer = BaseTokenizer()
-        tokenizer.train(base_vocab)
+
+    elif model_type == 'bert':
+        train_dataset = KrnDataset(train_path, seq_len=max_len)
+        eval_dataset = KrnDataset(eval_path, seq_len=max_len)
+        data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
+                                              pad_id=tokenizer.pad_id,)
+
+    elif model_type == 'roberta':
+        train_dataset = KrnDataset(train_path, seq_len=max_len - 1)
+        eval_dataset = KrnDataset(eval_path, seq_len=max_len - 1)
+        data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
+                                              pad_id=tokenizer.pad_id,)
+
+    elif model_type == 'mass':
+        train_dataset = KrnDataset(train_path, seq_len=max_len,
+                                   mask_mode=mask_mode)
+        eval_dataset = KrnDataset(eval_path, seq_len=max_len,
+                                  mask_mode=mask_mode)
+        data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
+                                              pad_id=tokenizer.pad_id,
+                                              is_mass=True,
+                                              pred_masked_only=pred_masked_only)
+
     else:
-        tokenizer = BertTokenizer()
-        tokenizer.train(base_vocab)
-        if model_type == 'bert':
-            train_dataset = MaskedKrnDataset(train_path, seq_len=max_len)
-            eval_dataset = MaskedKrnDataset(eval_path, seq_len=max_len)
-            data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
-                                                  pad_id=tokenizer.pad_id,)
-
-        elif model_type == 'roberta':
-            train_dataset = MaskedKrnDataset(train_path, seq_len=max_len - 1)
-            eval_dataset = MaskedKrnDataset(eval_path, seq_len=max_len - 1)
-            data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
-                                                  pad_id=tokenizer.pad_id,)
-
-        elif model_type == 'mass':
-            train_dataset = MaskedKrnDataset(train_path, seq_len=max_len,
-                                             mask_mode=mask_mode)
-            eval_dataset = MaskedKrnDataset(eval_path, seq_len=max_len,
-                                            mask_mode=mask_mode)
-            data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
-                                                  pad_id=tokenizer.pad_id,
-                                                  is_mass=True,
-                                                  pred_masked_only=pred_masked_only)
-
-        else:
-            raise ValueError('invalid model type')
+        raise ValueError('invalid model type')
 
     # Build model
     model = build_model(tokenizer.vocab_size,
@@ -125,11 +123,9 @@ def main(train_path, eval_path, base_vocab_file, max_len=256, bar_pad=False,
         output_dir=model_output_dir,  # The output directory
         overwrite_output_dir=True,  # overwrite the content of the output directory
         num_train_epochs=n_epochs,  # number of training epochs
-        per_device_train_batch_size=batch_size,  # perceiver ar: 32, the rest 8
-        per_device_eval_batch_size=batch_size,  # batch size for evaluation
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=batch_size,
         warmup_steps=500,  # number of warmup steps for learning rate scheduler
-        # eval_steps=2500,  # Number of update steps between two evaluations.
-        # save_steps=2500,  # after # steps model is saved
         logging_strategy='epoch',
         evaluation_strategy='epoch',
         save_strategy='epoch',

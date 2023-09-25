@@ -278,7 +278,7 @@ class MusicTransformer(MusicTransformerPretrained):
         self.model_parallel = False
         torch.cuda.empty_cache()
 
-    def forward(self, input_ids, labels=None, attn_mask=None, return_dict=True, **kwargs):
+    def forward(self, input_ids, labels=None, attn_mask=None, key_padding_mask=None, return_dict=True, **kwargs):
         x = self.wte(input_ids) / math.sqrt(self.n_embd)
         # PE
         # _, seq_len = input_ids.shape
@@ -286,7 +286,7 @@ class MusicTransformer(MusicTransformerPretrained):
         # x = x + pe.to(x.device)
 
         for layer in self.layers:
-            x = layer(x, attn_mask)
+            x = layer(x, attn_mask, key_padding_mask)
 
         x = self.ln_f(x)
         logits = self.lm_head(x)

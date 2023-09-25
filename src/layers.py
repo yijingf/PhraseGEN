@@ -72,10 +72,13 @@ class AttnBlock(nn.Module):
         self.mlp_block = MLPBlock(n_embd, n_fc, dropout)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, q_len=512):
+    def forward(self, x, attn_mask=None, key_padding_mask=None, q_len=512):
 
         x = self.ln_1(x)
-        attn = self.attn(x, q_len)
+        if self.attn_type == 'perceiver-self':
+            attn = self.attn(x, attn_mask, key_padding_mask, q_len)
+        else:
+            attn = self.attn(x, attn_mask, key_padding_mask)
 
         if self.attn_type == 'perceiver-cross':
             x = self.resid_dropout(x[:, -q_len:, :] + attn)
@@ -114,7 +117,18 @@ class PerceiverAttn(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(n_embd)
 
-    def forward(self, x, q_len=512):
+    def forward(self, x, attn_mask=None, key_padding_mask=None, q_len=512):
+        """_summary_
+
+        Args:
+            x (_type_): _description_
+            attn_mask (_type_, optional): It's already handled in forward, but still required by huggingface. Defaults to None.
+            key_padding_mask (_type_, optional): _description_. Defaults to None.
+            q_len (int, optional): _description_. Defaults to 512.
+
+        Returns:
+            _type_: _description_
+        """
         batch_size, seq_len, _ = x.shape
 
         if q_len > seq_len:
@@ -143,6 +157,10 @@ class PerceiverAttn(nn.Module):
                      (seq_len - q_len - 1, 0), value=1).to(attn.device)
         # mask.shape = (1, 1, seq_len, seq_len)
         attn = attn.masked_fill(mask == 0, float("-inf"))
+
+        if key_padding_mask is not None:
+            attn = attn.masked_fill(key_padding_mask.unsqueeze(1).unsqueeze(2) == 0,
+                                    float('-inf'))
 
         attn = F.softmax(attn, dim=-1)
 
