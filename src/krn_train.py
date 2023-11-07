@@ -3,10 +3,10 @@ from transformers import Trainer
 from transformers import TrainingArguments
 
 from krn_tokenizer import BertTokenizer
-from krn_data_loader import KrnDataset, KrnDataCollator, MaskedKrnDataCollator
+from krn_data_loader import KrnDataset, KrnDataCollator
 
 
-def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
+def build_model(vocab_size, model_type='mass', max_len=512, pad_id=0):
 
     if model_type == 'music-transformer':
         from models import MusicTransformer, MusicTransformerConfig
@@ -14,6 +14,8 @@ def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
                                         n_positions=max_len,
                                         n_head=8,
                                         n_layer=8,
+                                        n_embd=768,
+                                        n_fc=1024,
                                         pdrop=.1,)
         model = MusicTransformer(config)
 
@@ -21,20 +23,21 @@ def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
         from transformers import BertConfig, BertForMaskedLM
         config = BertConfig(vocab_size=vocab_size,
                             hidden_size=768,
-                            num_hidden_layers=6,
+                            num_hidden_layers=8,
                             num_attention_heads=8,
                             intermediate_size=1024,
-                            max_position_embeddings=max_len)
+                            max_position_embeddings=max_len,
+                            position_embedding_type='relative_key_query')
         model = BertForMaskedLM(config)
 
     elif model_type == 'roberta':
         from transformers import RobertaConfig, RobertaForMaskedLM
         config = RobertaConfig(vocab_size=vocab_size,
                                hidden_size=768,
-                               num_hidden_layers=4,
-                               num_attention_heads=4,
+                               num_hidden_layers=8,
+                               num_attention_heads=8,
                                intermediate_size=1024,
-                               max_position_embeddings=max_len)
+                               max_position_embeddings=max_len, position_embedding_type='relative_key_query')
 
         model = RobertaForMaskedLM(config)
 
@@ -44,12 +47,14 @@ def build_model(vocab_size, model_type='mass', max_len=1024, pad_id=0):
 
         config_encoder = BertConfig(vocab_size=vocab_size,
                                     num_hidden_layers=4,
+                                    hidden_size=768,
                                     num_attention_heads=8,
                                     intermediate_size=1024,
                                     position_embedding_type='relative_key_query')
 
         config_decoder = BertConfig(vocab_size=vocab_size,
                                     num_hidden_layers=4,
+                                    hidden_size=768,
                                     num_attention_heads=8,
                                     intermediate_size=1024,
                                     position_embedding_type='relative_key_query')
@@ -81,26 +86,30 @@ def main(train_path, eval_path, base_vocab_file, max_len=256, bar_pad=False,
         data_collator = KrnDataCollator(max_len=max_len)
 
     elif model_type == 'bert':
+        from krn_data_loader import BertKrnDataCollator
         train_dataset = KrnDataset(train_path, seq_len=max_len)
         eval_dataset = KrnDataset(eval_path, seq_len=max_len)
-        data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
-                                              pad_id=tokenizer.pad_id,)
+        data_collator = BertKrnDataCollator(vocab_size=tokenizer.vocab_size,
+                                            pad_id=tokenizer.pad_id,
+                                            mask_id=tokenizer.mask_id)
 
     elif model_type == 'roberta':
+        from krn_data_loader import BertKrnDataCollator
         train_dataset = KrnDataset(train_path, seq_len=max_len - 1)
         eval_dataset = KrnDataset(eval_path, seq_len=max_len - 1)
-        data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
-                                              pad_id=tokenizer.pad_id,)
+        data_collator = BertKrnDataCollator(vocab_size=tokenizer.vocab_size,
+                                            pad_id=tokenizer.pad_id,
+                                            mask_id=tokenizer.mask_id)
 
     elif model_type == 'mass':
+        from krn_data_loader import MassKrnDataCollator
         train_dataset = KrnDataset(train_path, seq_len=max_len,
                                    mask_mode=mask_mode)
         eval_dataset = KrnDataset(eval_path, seq_len=max_len,
                                   mask_mode=mask_mode)
-        data_collator = MaskedKrnDataCollator(mask_id=tokenizer.mask_id,
-                                              pad_id=tokenizer.pad_id,
-                                              is_mass=True,
-                                              pred_masked_only=pred_masked_only)
+        data_collator = MassKrnDataCollator(mask_id=tokenizer.mask_id,
+                                            pad_id=tokenizer.pad_id,
+                                            pred_masked_only=pred_masked_only)
 
     else:
         raise ValueError('invalid model type')
@@ -113,10 +122,15 @@ def main(train_path, eval_path, base_vocab_file, max_len=256, bar_pad=False,
 
     # Setup Training Args
     os.makedirs(model_dir, exist_ok=True)
+
+    prefix = f"{model_type}"
+
     if bar_pad:
-        prefix = f"{model_type}-pad"
-    else:
-        prefix = f"{model_type}"
+        prefix = f"{prefix}-pad"
+
+    if not pred_masked_only:
+        prefix = f"{prefix}-all"
+
     model_output_dir = os.path.join(model_dir, f"{prefix}-krn-{max_len}")
 
     training_args = TrainingArguments(
