@@ -1,5 +1,5 @@
 import json
-from humdrum.decode import decode_token_to_pm
+from kern_utils.decode import decode_token_to_pm
 
 
 class BaseTokenizer():
@@ -112,15 +112,20 @@ class BaseTokenizer():
 
     def postprocess(self, token_ids):
 
-        # Trim padding or eos token
-        processed_token_ids = []
-        for token_id in token_ids:
-            if token_id in [self.eos_id, self.pad_id]:
-                break
-            else:
-                processed_token_ids.append(token_id)
-
+        if self.eos_id in token_ids:
+            idx = token_ids.index(self.eos_id)
+            return token_ids[:idx]
         return token_ids
+
+        # # Trim padding or eos token
+        # processed_token_ids = []
+        # for token_id in token_ids:
+        #     if token_id in [self.eos_id, self.pad_id]:
+        #         break
+        #     else:
+        #         processed_token_ids.append(token_id)
+
+        # return processed_token_ids
 
 
 class MTTokenizer(BaseTokenizer):

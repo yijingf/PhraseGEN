@@ -6,7 +6,7 @@ from common import token2v
 
 default_time_signature = '4/4'
 default_tempo = 120
-default_velocity = 100
+default_velocity = 64
 
 
 def pitch_name_to_pm_pitch(pitch_name):

@@ -1,6 +1,7 @@
 """Helper functions for loading data and evaluation.
 """
 import pretty_midi
+from copy import deepcopy
 
 
 def pretty_midi_sort(pm):
@@ -15,19 +16,19 @@ def pretty_midi_sort(pm):
     return
 
 
-def trim_midi(pm, t_start, t_end, sorted=True, meta=True, cut_by='offset'):
+def trim_midi(pm, t_start, t_end, is_sorted=True, meta=True, cut_by='offset'):
     """Trim midi given the start and end time.
 
     Args:
         midi (PrettyMIDI): pretty_midi loaded by pretty midi. Assume that notes are sorted by start time.
         t_start (float): starting time in second.
         t_end (float): ending time in second.
-        sorted (Optional, bool): whether notes have been sorted. 
+        is_sorted (Optional, bool): whether notes have been sorted. 
 
     Returns:
         PrettyMIDI: Sliced pretty_midi.
     """
-    if not sorted:
+    if not is_sorted:
         pretty_midi_sort(pm)
 
     # Initial tempo
@@ -111,10 +112,10 @@ def trim_midi(pm, t_start, t_end, sorted=True, meta=True, cut_by='offset'):
             elif cut_by == 'offset':
                 note_end = min(t_end - t_start, note.end - t_start)
 
-            if prev_t_st is None:
-                prev_t_st = note.start
-            elif note.start < prev_t_st:
-                prev_t_st = note.start
+            # if prev_t_st is None:
+            #     prev_t_st = note.start
+            # elif note.start < prev_t_st:
+            #     prev_t_st = note.start
 
             new_note = pretty_midi.Note(velocity=note.velocity, pitch=note.pitch,
                                         start=max(0, note.start - t_start),
@@ -130,3 +131,72 @@ def trim_midi(pm, t_start, t_end, sorted=True, meta=True, cut_by='offset'):
 
         pm_slice.instruments.append(inst)
     return pm_slice, prev_t_st
+
+
+def strip_midi(pm, is_sorted=True):
+    if not is_sorted:
+        pretty_midi_sort(pm)
+
+    t_offset = pm.get_end_time()
+    for inst in pm.instruments:
+        t_offset = min(inst.notes[0].start, t_offset)
+
+    for inst in pm.instruments:
+        for note in inst.notes:
+            note.start -= t_offset
+            note.end -= t_offset
+
+    return pm, t_offset
+
+
+def change_pitch(pm, pitch_shift, inplace=True):
+    """Pitch transpose by `pitch_shift` in chromatic scale.
+
+    Args:
+        pm (PrettyMIDI): Original PrettyMIDI object.
+        pitch_shift (int): Pitch shift in in chromatic scale.
+        inplace (bool, optional): Perform pitch transpose in place or make a copy of the Original. Defaults to True.
+
+    Returns:
+        The pitch transposed PrettyMIDI object.
+    """
+    pitch_shift = int(pitch_shift)
+
+    if not inplace:
+        new_pm = deepcopy(pm)
+    else:
+        new_pm = pm
+
+    for inst in new_pm.instruments:
+        for note in inst.notes:
+            note.pitch += pitch_shift
+    return new_pm
+
+
+def change_tempo(pm, ratio=1.0):
+    """Transpose the tempo of a given prettyMIDI object.
+
+    Args:
+        pm (pretty_midi.PrettyMIDI): original PrettyMIDI object
+        ratio (float, optional): ratio = (new tempo)/(original tempo). Defaults to 1.0.
+
+    Returns:
+        A new PrettyMIDI object
+    """
+    new_pm = pretty_midi.PrettyMIDI()
+
+    for orig_inst in pm.instruments:
+        inst = pretty_midi.Instrument(program=orig_inst.program,
+                                      is_drum=orig_inst.is_drum,
+                                      name=orig_inst.name)
+
+        for orig_note in orig_inst.notes:
+            note = pretty_midi.Note(velocity=orig_note.velocity,
+                                    pitch=orig_note.pitch,
+                                    start=orig_note.start / ratio,
+                                    end=orig_note.end / ratio)
+            inst.notes.append(note)
+
+        new_pm.instruments.append(inst)
+
+    return new_pm

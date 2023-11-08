@@ -1,7 +1,26 @@
+"""
+Segment events in root_dir/event/composer into phrases with a fixed length and hop-size in root_dir/segment/composer.
+
+We assume that time signature and tempo would not change within a phrase. Therefore, we start a new phrase once a time signature and tempo change is identified. 
+
+All musical events are normalized:
+* Notes are transposed to C major or minor. 
+* Time signature are normalized to a denominator of 4.
+* Tempo are digitized into 10 bins
+
+Usage: 
+# Segment into 8-bar phrases with 2-bar hop size
+python3 segment.py [--root_dir "../../sonata_dataset"] [--len_phrase 8] [--hop_size 2]
+
+"""
+
 import json
 from fractions import Fraction
-from common import normalize_ts_tp, normalize_event, token2v
-from common import remove_repeat, load_event, get_sub_sect_event, concat_event
+
+import sys
+sys.path.append("..")
+from kern_utils.event import concat_event, remove_repeat, get_sub_sect_event
+from kern_utils.common import load_event, normalize_ts_tp, normalize_event, token2v
 
 
 def merge_section_name(pattern):
@@ -32,13 +51,13 @@ def merge_section_name(pattern):
 
 
 def phrase_segment(measures, max_len_phrase=8, measure_offset=0, phrase_offset=0):
-    """Segment measures into phrases.
+    """Segment sections into phrases containing certain number of measures.
 
     Args:
         measures (_type_): _description_
-        max_len_phrase (int, optional): _description_. Defaults to 8.
-        measure_offset (int, optional): _description_. Defaults to 0.
-        phrase_offset (int, optional): _description_. Defaults to 0.
+        max_len_phrase (int, optional): Max number of measures per phrase. Defaults to 8.
+        measure_offset (int, optional): Segment offset. Defaults to 0.
+        phrase_offset (int, optional): Phrase count offset. Defaults to 0.
 
     Returns:
         _type_: _description_
@@ -169,29 +188,6 @@ def get_sect_event(event_file):
                                             struct['attr'])[0]
 
     return sect_event
-
-
-def old_segment(sect_event=None, event_file=None, max_len_phrase=8):
-
-    if sect_event is None:
-        if event_file is None:
-            raise ValueError(f"Invalid file name {event_file}.")
-        sect_event = get_sect_event(event_file)
-
-    # Get phrases from section
-    all_phrases = []
-    for event in sect_event.values():
-
-        # Key, time transpose
-        event = normalize_event(event)
-
-        phrases = phrase_segment(event, max_len_phrase)
-        if not phrases:
-            continue
-        for phrase in phrases.values():
-            all_phrases.append(phrase)
-
-    return all_phrases
 
 
 def segment(sect_event=None, event_file=None, max_len_phrase=8, hop_size=4):

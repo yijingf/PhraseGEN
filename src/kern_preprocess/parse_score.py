@@ -1,4 +1,5 @@
-"""Extract notes (grouped by measures), tempo, time signature from kern file or music xml, and output a dictionary that contains following attributes:
+"""
+Extract notes (grouped by measures), tempo, time signature from kern file in root_dir/krn/composer or music xml in root_dir/mxml/composer in root_dir/krn, and output a JSON file in root_dir/event/composer with the following structure:
 {
     "note": {
         `measure_id`:{
@@ -16,22 +17,24 @@
         }
 }
 
-The note onset and duration are scaled by quarter note.
+Note onset position and duration are represented by proportions of quarter note.
 
 Humdrum file could be loaded
 (1) directly as .krn file
 (2) as .xml converted by `hum2xml`.
 Method (2) is recommended because music21 has various unexpected issues when parsing .krn file.
 
-NOTE: The current version has issue parsing repetition sign when the first volta is not complete. The only fix is to append rest note to the incomplete volta. See `../../sonata-dataset/README.md` for more details.
+NOTE: The current version has issue parsing repetition sign when the first volta is not complete. The only fix is to append rest notes to the incomplete volta. See `README.md` and Table-2 in `Appendix.mx` for more details.
+
+Usage: python3 parse_score.py [--root_dir ../../sonata_dataset]
 
 """
+
 import re
 import math
 import music21
 from fractions import Fraction
 from music21 import key, stream, pitch
-# environment.set("musescoreDirectPNGPath", "/Applications/MuseScore 4.app/Contents/MacOS/mscore")
 
 
 def is_kern_note(entry):
@@ -78,8 +81,8 @@ def entries_has_note(entries):
     return has_note
 
 
-def norm_pitch(pitch_str):
-    """Make sure equivalent pitches have identical annotation.
+def normalize_pitch(pitch_str):
+    """Normalize equivalent pitch strings, i.e. D- and C#, to identical annotation.
 
     Args:
         pitch_str (str)
@@ -441,7 +444,8 @@ def part_event_extract(part):
             if note.isChord:
 
                 for chord_note in note.notes:
-                    pitch_name = norm_pitch(chord_note.pitch.nameWithOctave)
+                    pitch_str = chord_note.pitch.nameWithOctave
+                    pitch_name = normalize_pitch(pitch_str)
                     note_duration = Fraction(chord_note.duration.quarterLength)
 
                     if not chord_note.tie:
@@ -474,7 +478,8 @@ def part_event_extract(part):
                                 [offset, pitch_name, note_duration])
 
             else:
-                pitch_name = norm_pitch(note.pitch.nameWithOctave)
+                pitch_str = note.pitch.nameWithOctave
+                pitch_name = normalize_pitch(pitch_str)
                 note_duration = Fraction(note.duration.quarterLength)
 
                 if not note.tie:

@@ -1,13 +1,28 @@
+"""Render event tokens to midi and audio.
+
+Usage: python3 render_event.py [--event path/to/event] [--output_dir output_dir]
+
+"""
+import os
 import json
 import pretty_midi
+import scipy.io.wavfile
 from fractions import Fraction
 
-from decode import decode_token_to_pm
-from common import normalize_ts, remove_repeat
-from common import load_event, get_sub_sect_event, concat_event
+import sys
+sys.path.append("..")
+from kern_utils.decode import decode_token_to_pm
+from kern_utils.common import normalize_ts, load_event
+from kern_utils.event import remove_repeat, concat_event, get_sub_sect_event
 
 
 def unroll_repeat(event_file, volta_only=True):
+    """Unroll repeats according to the section pattern in event_file.
+
+    Args:
+        event_file (str): Path to event file.
+        volta_only (bool, optional): Unroll repeats only if there is volta bracket. Defaults to True.
+    """
     event, struct = load_event(event_file)
 
     # Sort sections
@@ -80,14 +95,24 @@ def event_to_pm(event):
     return final_pm, sect_onset
 
 
-def main(event_file, midi_file, meta_file, volta_only=True):
+def main(event_file, output_dir, volta_only=True, fs=44100.0):
 
+    prefix = os.path.basename(event_file).split(".")[0]
+    midi_file = os.path.join(output_dir, f"{prefix}.mid")
+    mapping_file = os.path.join(output_dir, f"{prefix}.json")
+    audio_file = os.path.join(output_dir, f"{prefix}.wav")
+
+    # Render event to midi
     unrolled_event, idx_mapping = unroll_repeat(event_file, volta_only)
     pm, sect_onset = event_to_pm(unrolled_event)
 
     pm.write(midi_file)
 
-    with open(meta_file, "w") as f:
+    # Render midi to audio
+    audio = pm.fluidsynth(fs=float(fs))
+    scipy.io.wavfile.write(audio_file, int(fs), audio)
+
+    with open(mapping_file, "w") as f:
         json.dump({"idx_mapping": idx_mapping, "onset": sect_onset}, f)
 
     return
@@ -99,23 +124,14 @@ if __name__ == "__main__":
 
     parser.add_argument("--event", dest="event_file", type=str,
                         help="Input event file name.")
-    parser.add_argument("--meta", dest="meta_file", type=str,
-                        help="Output meta file name.")
-    parser.add_argument("--midi", dest="midi_file", type=str, default=None,
-                        help="Output MIDI file name.")
-    parser.add_argument("--audio", dest="audio_file", type=str, default=None,
-                        help="Output WAV audio file name.")
+    parser.add_argument("--output_dir", dest="output_dir", type=str,
+                        help="Output path.")
+    parser.add_argument("--fs", dest="fs", type=float,
+                        default=44100.0, help="Rendered audio sampling frequency.")
+    parser.add_argument("--unroll_all", dest="unroll_all",
+                        action="store_false", help="Unroll all repeats. Default to False.")
 
     args = parser.parse_args()
 
-    if not args.input:
-        raise ValueError("Please specify input file name.")
-
-    if not args.output:
-        raise ValueError("Please specify output file name.")
-
-    if args.output.split(".")[-1] != 'wav':
-        raise ValueError("Incorrect output format.")
-
-    main(args.event_file, args.meta_file, volta_only=True,
-         midi_file=args.midi_file, audio_file=args.audio_file)
+    volta_only = not args.unroll_all
+    main(args.event_file, args.output_dir, volta_only=volta_only, fs=args.fs)

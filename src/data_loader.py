@@ -4,45 +4,202 @@ import random
 import numpy as np
 from torch.utils.data import Dataset
 
-from midi_tokenizer import pad_id, cls_id, sep_id, mask_id, eos_id
+
+def _mask_collate_batch(examples, pad_id=0, mask_id=4, pred_masked_only=False):
+    """
+    Apply bar-level masking.
+    """
+    tokens, mask_idx = [], []
+    for i, e in enumerate(examples):
+        if len(e[1]):
+            tokens.append(e[0])
+            mask_idx.append(e[1])
+
+    if isinstance(examples[0][0], (list, tuple, np.ndarray)):
+        tokens = [torch.tensor(e, dtype=torch.long) for e in tokens]
+
+    max_len = max(int(x.size(0)) for x in tokens)
+    input_result = tokens[0].new_full([len(tokens), max_len], pad_id)
+    label_result = tokens[0].new_full([len(tokens), max_len], pad_id)
+    decoder_input = tokens[0].new_full([len(tokens), max_len], mask_id)
+
+    for i in range(len(tokens)):
+        seq_len = tokens[i].shape[0]
+        input = tokens[i].clone()
+        input[mask_idx[i]] = mask_id
+        input_result[i, :seq_len] = input
+
+        decoder_input[i, mask_idx[i]] = tokens[i][mask_idx[i]]
+
+        if pred_masked_only:
+            label_result[i, mask_idx[i]] = tokens[i][mask_idx[i]]
+        else:
+            label_result[i, :seq_len] = tokens[i]
+
+    pad = torch.tensor([[mask_id] for _ in range(len(tokens))],
+                       dtype=torch.long)
+    decoder_input = torch.cat((pad, decoder_input[:, :-1]), 1)
+
+    return input_result, decoder_input, label_result
 
 
-def sliding_window(seq, seq_len=512, hop_len=256):
-    n = len(seq)
-    i = 0
+class MassDataCollator():
+    """
+    Data collator
+    """
 
-    array = []
-    while i + seq_len < n:
-        array.append(seq[i: i + seq_len])
-        i += hop_len
+    def __init__(self, mask_id=4, pad_id=0, pred_masked_only=False, mask_pad=True):
 
-    if i < n - 1:
-        array.append(seq[i:])
-    return array
+        self.mask_id = mask_id
+        self.pad_id = pad_id
+        self.pred_masked_only = pred_masked_only
+        self.mask_pad = mask_pad
+
+    def __post_init__(self):
+        pass
+
+    def __call__(self, examples):
+        # Handle dict or lists with proper padding and conversion to tensor.
+
+        inputs, decoder_inputs, labels = _mask_collate_batch(examples,
+                                                             pad_id=self.pad_id,
+                                                             mask_id=self.mask_id,
+                                                             pred_masked_only=self.pred_masked_only)
+
+        batch = {"input_ids": inputs}
+
+        batch['decoder_input_ids'] = decoder_inputs
+
+        if self.mask_pad:
+            # Encoder Attention Mask, equivalent to key_padding_mask
+            attention_mask = torch.ones_like(inputs)
+            attention_mask[inputs == self.pad_id] = 0
+            batch['attention_mask'] = attention_mask
+
+            # Decoder Attention Mask, equivalent to key_padding_mask
+            decoder_attention_mask = torch.ones_like(decoder_inputs)
+            attention_mask[decoder_inputs == self.pad_id] = 0
+            batch['decoder_attention_mask'] = decoder_attention_mask
+
+        labels[labels == self.pad_id] = -100
+        # nn.CrossEntropy ignore pad_id by default
+        batch["labels"] = labels
+
+        return batch
 
 
-def make_mask(l, max_len):
-    return [1 for _ in range(l)] + [0 for _ in range(max_len - l)]
+def _dynamic_mask_collate_batch(examples, pad_id=0, mask_id=4,
+                                vocab_size=324,
+                                corrupt_ratio=.15, mask_ratio=.8, replace_ratio=.1):
+    """
+    Collate `examples` into a batch, adapted from huggingface transformer
+    Randomly corrupt individual tokens in a sequence.
+    """
+    # Assume examples[0][1] is invalid Mask
+    tokens = []
+    for i, e in enumerate(examples):
+        tokens.append(e[0])
+
+    # Tensorize if necessary.
+    if isinstance(tokens[0], (list, tuple, np.ndarray)):
+        examples = [torch.tensor(e, dtype=torch.long) for e in tokens]
+
+    length_of_first = examples[0].size(0)
+
+    # Check if padding is necessary.
+    are_tensors_same_length = all(
+        x.size(0) == length_of_first for x in examples)
+    if are_tensors_same_length:
+        return torch.stack(examples, dim=0)
+
+    max_len = max(x.size(0) for x in examples)
+
+    input_ids = examples[0].new_full([len(examples), max_len], pad_id)
+    labels = examples[0].new_full([len(examples), max_len], pad_id)
+
+    for i, example in enumerate(examples):
+
+        seq_len = example.shape[0]
+
+        label = example.clone()
+
+        n_corrupt = int(seq_len * corrupt_ratio)
+        corrupt_idx = random.sample(range(seq_len), n_corrupt)
+
+        n_mask = int(n_corrupt * mask_ratio)
+        mask_idx = corrupt_idx[: n_mask]
+
+        n_replace = int(n_corrupt * replace_ratio)
+        replace_idx = corrupt_idx[n_mask: n_mask + n_replace]
+        replaced = random.choices(range(pad_id + 1, vocab_size), k=n_replace)
+
+        labels[i, replace_idx] = label[replace_idx]
+        labels[i, mask_idx] = label[mask_idx]
+
+        input_ids[i, :seq_len] = example
+        input_ids[i, replace_idx] = torch.tensor(replaced, dtype=torch.long)
+        input_ids[i, mask_idx] = mask_id
+
+    return input_ids, labels
 
 
-def concat_phrases(tokens):
-    concat_tokens = []
-    token_type = []
+class BertDataCollator():
+    """
+    Bert Data Corruption
+    The training data generator chooses 15% of the token positions at random for prediction. 
+    If the i-th token is chosen, we replace the i-th token with 
+    (1) the [MASK] token 80% of the time
+    (2) a random token 10% of the time
+    (3) the unchanged i-th token 10% of the time. 
+    Then, Ti will be used to predict the original token with cross entropy loss. 
+    """
 
-    for phrase_0, phrase_1 in tokens:
-        len_phrase_0 = len(phrase_0)
-        len_phrase_1 = len(phrase_1)
-        line = [cls_id] + phrase_0 + [sep_id] + phrase_1 + [sep_id]
-        type_id = [0 for _ in range(len_phrase_0 + 2)] + \
-            [1 for _ in range(len_phrase_1 + 1)]
-        concat_tokens.append(line)
-        token_type.append(type_id)
+    def __init__(self, pad_id=0, mask_id=4, max_len=512, vocab_size=324,
+                 corrupt_ratio=.15, mask_ratio=.8, replace_ratio=.1, mask_pad=True):
 
-    return concat_tokens, token_type
+        self.pad_id = pad_id
+        self.mask_id = mask_id
+        self.max_len = max_len
+
+        self.vocab_size = vocab_size
+        self.corrupt_ratio = corrupt_ratio
+
+        self.mask_ratio = mask_ratio
+        self.replace_ratio = replace_ratio
+
+        self.mask_pad = mask_pad
+
+    def __post_init__(self):
+        pass
+
+    def __call__(self, examples):
+        # Handle dict or lists with proper padding and conversion to tensor.
+        batch = {}
+        input_ids, labels = _dynamic_mask_collate_batch(examples,
+                                                        pad_id=self.pad_id,
+                                                        mask_id=self.mask_id,
+                                                        vocab_size=self.vocab_size,
+                                                        corrupt_ratio=self.corrupt_ratio,
+                                                        mask_ratio=self.mask_ratio,
+                                                        replace_ratio=self.replace_ratio)
+
+        batch['input_ids'] = input_ids
+
+        if self.mask_pad:
+            # Attention Mask, equivalent to key_padding_mask
+            attention_mask = torch.ones_like(input_ids)
+            attention_mask[input_ids == self.pad_id] = 0
+            batch['attention_mask'] = attention_mask
+
+        labels[labels == self.pad_id] = -100
+        # nn.CrossEntropy ignore pad_id by default
+        batch["labels"] = labels
+
+        return batch
 
 
-def _torch_collate_batch(examples, pad_id=pad_id,
-                         max_len=1024, pad_to_max_len=False, align_right=False):
+def _collate_batch(examples, pad_id=0, max_len=512,
+                   pad_to_max_len=False, align_right=False):
     """Collate `examples` into a batch, adapted from huggingface transformer"""
 
     # Tensorize if necessary.
@@ -73,30 +230,25 @@ def _torch_collate_batch(examples, pad_id=pad_id,
     return result
 
 
-class MIDIDataCollator():
+class BaseDataCollator():
     """
     Data collator
     """
 
-    def __init__(self, pad_id=pad_id, q_len=None, max_len=1024,
-                 pad_to_max_len=False, align_right=False, mask_pad=False):
+    def __init__(self, pad_id=0, q_len=None, max_len=256,
+                 pad_to_max_len=False, align_right=False):
         self.q_len = q_len
         self.pad_id = pad_id
         self.max_len = max_len
         self.pad_to_max_len = pad_to_max_len
         self.align_right = align_right
-        self.mask_pad = mask_pad
 
     def __post_init__(self):
         pass
 
     def __call__(self, examples):
         # Handle dict or lists with proper padding and conversion to tensor.
-        batch = {"input_ids": _torch_collate_batch(examples,
-                                                   pad_id=self.pad_id,
-                                                   max_len=self.max_len,
-                                                   pad_to_max_len=self.pad_to_max_len,
-                                                   align_right=self.align_right)}
+        batch = {"input_ids": _collate_batch(examples, pad_id=self.pad_id)}
 
         labels = batch["input_ids"].clone()
 
@@ -104,10 +256,9 @@ class MIDIDataCollator():
             labels = labels[:, -self.q_len:]
             batch["q_len"] = self.q_len
 
-        if self.mask_pad:
-            key_padding_mask = torch.ones_like(labels)
-            key_padding_mask[labels == self.pad_id] = self.pad_id
-            batch['key_padding_mask'] = key_padding_mask
+        key_padding_mask = torch.ones_like(labels)
+        key_padding_mask[labels == self.pad_id] = 0
+        batch['key_padding_mask'] = key_padding_mask
 
         labels[labels == self.pad_id] = -100
         # nn.CrossEntropy ignore pad_id by default
@@ -116,123 +267,68 @@ class MIDIDataCollator():
         return batch
 
 
-class MIDINSPDataCollator():
-    """
-    Data collator
-    """
-
-    def __init__(self, pad_id=pad_id):
-        self.pad_id = pad_id
-
-    def __post_init__(self):
-        pass
-
-    def __call__(self, examples):
-        # Handle dict or lists with proper padding and conversion to tensor.
-        n = len(examples)
-        inputs = [examples[i][0] for i in range(n)]
-        token_type = [examples[i][2] for i in range(n)]
-
-        batch = {"input_ids": _torch_collate_batch(inputs,
-                                                   pad_id=self.pad_id)}
-        _, seq_len = batch['input_ids'].shape
-
-        batch["labels"] = torch.tensor([examples[i][1] for i in range(n)])
-        batch["token_type_ids"] = _torch_collate_batch(
-            token_type, pad_id=self.pad_id)
-        batch['attention_mask'] = torch.tensor(
-            [make_mask(len(inputs[i]), seq_len) for i in range(n)])
-        return batch
-
-
 class BaseDataset(Dataset):
-    def __init__(self, data):
-        self.data = data
-        return
-
-    def __getitem__(self, index):
-        return self.data[index]
-
-    def __len__(self):
-        return len(self.data)
-
-
-class MIDIDataset(Dataset):
-    """Load preprocessed data, return audio encoding, midi tokens and features at different hierarchies.
-    """
-
-    def __init__(self, token_path, max_len=512, reverse=False, shuffle=True):
-
-        # Load midi token sequences
-        # self.tokens = np.load(token_path, allow_pickle=True)
+    def __init__(self, token_path, seq_len=512, shuffle=True):
 
         with open(token_path) as f:
-            tokens = json.load(f)
+            phrases = json.load(f)
 
-        self.tokens = []
-        for _, phrases in tokens.items():
-            for i in phrases:
-                self.tokens += sliding_window(i + [eos_id], max_len)
+        self.input_tokens = [
+            i['token_ids'] for i in phrases if len(i['token_ids']) <= seq_len]
 
         if shuffle:
-            idx = list(range(len(self.tokens)))
+            idx = list(range(len(self.input_tokens)))
             random.shuffle(idx)
-            self.tokens = [self.tokens[i] for i in idx]
-
-        if reverse:
-            self.tokens = [i[::-1] for i in self.tokens]
-
-        # Remove sequence longer than max_len
-        # self.tokens = [i for i in self.tokens if len(i) <= max_len]
-        # self.tokens = [i[: max_len] for i in self.tokens]
+            self.input_tokens = [self.input_tokens[i] for i in idx]
 
     def __getitem__(self, index):
-        """Return 
+        """Return
 
         Args:
             index (int): index of entry
         """
-        token = self.tokens[index]
-        return token
+        token_ids = self.input_tokens[index]
+        return token_ids
 
     def __len__(self):
-        return len(self.tokens)
+        return len(self.input_tokens)
 
 
-class MIDINSPDataset(Dataset):
-    """Load preprocessed data, return audio encoding, midi tokens and features at different hierarchies.
-    """
+class MaskedDataset(Dataset):
+    def __init__(self, token_path, seq_len=512, shuffle=True, mask_mode='center'):
 
-    def __init__(self, token_path, shuffle=True):
-
-        # Load midi token sequences
         with open(token_path) as f:
-            tokens = json.load(f)
+            phrases = json.load(f)
 
-        n_pos = len(tokens['is_next'])
-        n_neg = len(tokens['not_next'])
-        tokens = tokens['is_next'] + tokens['not_next']
+        phrases = [i for i in phrases if len(i['token_ids']) <= seq_len]
 
-        self.tokens, self.token_type = concat_phrases(tokens)
-        self.labels = [1 for _ in range(n_pos)] + [0 for _ in range(n_neg)]
+        self.input_tokens = [i['token_ids'] for i in phrases]
+        if mask_mode == 'center':
+            self.mask_idx = [i['center_mask_idx'] for i in phrases]
+        elif mask_mode == 'rand':
+            self.mask_idx = [i['rand_mask_idx'] for i in phrases]
+        elif mask_mode == 'mix':
+            self.input_tokens += self.input_tokens
+            self.mask_idx = [i['rand_mask_idx']
+                             for i in phrases] + [i['center_mask_idx'] for i in phrases]
+        else:
+            raise ValueError("Unknown masking type.")
 
         if shuffle:
-            idx = list(range(len(self.tokens)))
+            idx = list(range(len(self.input_tokens)))
             random.shuffle(idx)
-            self.tokens = [self.tokens[i] for i in idx]
-            self.token_type = [self.token_type[i] for i in idx]
-            self.labels = [self.labels[i] for i in idx]
+            self.input_tokens = [self.input_tokens[i] for i in idx]
+            self.mask_idx = [self.mask_idx[i] for i in idx]
 
     def __getitem__(self, index):
-        """Return 
+        """Return
 
         Args:
             index (int): index of entry
         """
-        token = self.tokens[index]
-        label = self.labels[index]
-        token_type = self.token_type[index]
-        return token, label, token_type
+        token_ids = self.input_tokens[index]
+        mask_idx = self.mask_idx[index]
+        return token_ids, mask_idx
 
     def __len__(self):
-        return len(self.tokens)
+        return len(self.input_tokens)

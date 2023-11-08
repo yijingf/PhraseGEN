@@ -1,10 +1,14 @@
 #!/bin/bash
+#
+# Convert .krn in `path/to/krn-dataset/krn` to music .xml in `path/to/krn-dataset/mxml` using humextra (https://github.com/craigsapp/humextra).
+# Usage: bash krn2xml.sh path/to/krn-dataset
+#
 
-root_dir=$1
-# root_dir="../../sonata-dataset"
+root_dir=$1 #"../../sonata-dataset"
 
 declare -a composers=("mozart" "beethoven" "haydn" "scarlatti")
 
+# Iterate through 4 composers
 for composer in "${composers[@]}"; do
     echo ""
     echo "$composer"

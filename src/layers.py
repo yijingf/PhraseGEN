@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from rotary_embedding_torch import RotaryEmbedding
 
 
+
 def positionalencoding1d(n_embd, seq_len):
     """
     :param n_embd: dimension of the model

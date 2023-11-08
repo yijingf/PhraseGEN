@@ -3,10 +3,10 @@
 import note_seq
 import numpy as np
 
-from utils import vocabularies
-from utils import note_sequences
-from utils import run_length_encoding
-from utils.constants import NUM_VELOCITY_BINS
+import vocabularies
+import note_sequences
+import run_length_encoding
+from constants import NUM_VELOCITY_BINS
 
 # Constants
 codec = vocabularies.build_codec(
