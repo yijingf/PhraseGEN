@@ -1,5 +1,8 @@
 """
-Generate train/validation dataset as JSON file in root_dir/dataset with the following structure:
+Make dataset for MASS model.
+
+Output:
+train/validation dataset as JSON file in DATA_DIR/dataset with the following structure:
 `[
     "token_ids": [],
     "center_mask_idx": [],
@@ -9,11 +12,11 @@ Generate train/validation dataset as JSON file in root_dir/dataset with the foll
 `
 where `center_mask_idx` are indices of masked tokens in the continuous measures in the middle of a phrase, `rand_mask_idx` are indices of masked tokens in random measures. 
 
-This script also generates a base vocabluary list in root_dir/vocab/base_vocab.txt of normalized music event tokens. 
+This script also generates a base vocabluary list in DATA_DIR/vocab/base_vocab.txt of normalized music event tokens. 
 
 Usage:
 # Generate dataset 80% of data as training set, sequence length of 512, bar-level padded.
-python3 dataset.py [--root_dir "../../sonata-dataset"] [--split_ratio 0.8] [--seq_len 512] [--pad_bar]
+python3 dataset.py [--split_ratio 0.8] [--seq_len 512] [--pad_bar]
 
 """
 
@@ -30,6 +33,9 @@ sys.path.append("..")
 from kern_utils.common import token2v
 from kern_utils.tokenizer import BertTokenizer
 from kern_utils.event import concat_measure, mask_measure_to_idx
+
+# Constants
+from kern_utils.constants import DATA_DIR
 
 
 def validate_phrase(phrase):
@@ -248,12 +254,12 @@ def get_vocab(seg_dir):
     return vocab
 
 
-def main(root_dir, split_ratio, seq_len=512, pad_bar=False):
+def main(split_ratio, seq_len=512, pad_bar=False):
 
-    seg_dir = os.path.join(root_dir, "segment")
+    seg_dir = os.path.join(DATA_DIR, "segment")
 
     # Split train/validation dataset.
-    fname_data_split = os.path.join(root_dir, "train_val_split.csv")
+    fname_data_split = os.path.join(DATA_DIR, "train_val_split.csv")
     if not os.path.exists(fname_data_split):
         df = split_dataset(seg_dir, split_ratio)
         df.to_csv(fname_data_split, index=False)
@@ -261,7 +267,7 @@ def main(root_dir, split_ratio, seq_len=512, pad_bar=False):
         df = pd.read_csv(fname_data_split)
 
     # Get base vocabulary from the normalized event
-    vocab_fname = os.path.join(root_dir, "vocab", "base_vocab.txt")
+    vocab_fname = os.path.join(DATA_DIR, "vocab", "base_vocab.txt")
     if os.path.exists(vocab_fname):
         with open(vocab_fname) as f:
             base_vocab = f.read().splitlines()
@@ -278,7 +284,7 @@ def main(root_dir, split_ratio, seq_len=512, pad_bar=False):
     tokenizer.train(base_vocab)
 
     # Make dataset
-    out_dir = os.path.join(root_dir, "dataset")
+    out_dir = os.path.join(DATA_DIR, "dataset")
     splits = ['train', 'val']
     datasets = {}
     fnames = {}
@@ -308,8 +314,6 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root_dir", dest="root_dir", type=str,
-                        default="../../sonata-dataset/", help="Root directory.")
     parser.add_argument("--split_ratio", dest="split_ratio", type=float,
                         default=0.8, help="Train/validation split ratio. Default to 0.8.")
     parser.add_argument("--seq_len", dest="sequence_len", type=float,
@@ -318,4 +322,4 @@ if __name__ == "__main__":
                         action="store_false", help="Apply bar-level padding. Default to False.")
 
     args = parser.parse_args()
-    main(args.root_dir, args.split_ratio, args.seq_len, args.pad_bar)
+    main(args.split_ratio, args.seq_len, args.pad_bar)

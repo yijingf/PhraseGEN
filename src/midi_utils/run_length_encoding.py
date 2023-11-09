@@ -18,7 +18,7 @@ import dataclasses
 from typing import Any, Callable, Mapping, MutableMapping, Tuple, Optional, Sequence, TypeVar
 
 from absl import logging
-from .event_codec import Event, Codec
+from event_codec import Event, Codec
 
 import numpy as np
 import seqio
@@ -120,9 +120,9 @@ def encode_and_index_events(
     cur_state_event_idx = 0
 
     def fill_event_start_indices_to_cur_step():
-        while(len(event_start_indices) < len(frame_times) and
-              frame_times[len(event_start_indices)] <
-              cur_step / codec.steps_per_second):
+        while (len(event_start_indices) < len(frame_times) and
+               frame_times[len(event_start_indices)] <
+               cur_step / codec.steps_per_second):
             event_start_indices.append(cur_event_idx)
             state_event_indices.append(cur_state_event_idx)
 

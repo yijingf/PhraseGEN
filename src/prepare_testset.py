@@ -9,7 +9,7 @@ from midi_utils.common import change_pitch
 from midi_utils.rel_tokenizer import RelTokenizer
 
 # Constant
-from kern_utils.constants import PITCH_OFFSET_DICT
+from kern_utils.constants import PITCH_OFFSET_DICT, DATA_DIR
 
 
 def check_consistency(phrase):
@@ -52,11 +52,11 @@ def get_orig_event(event_file, start=(0, 0), end=(8, 4), len_primer_measure=2):
     return seg_event
 
 
-def main(root_dir, info, len_primer_measure=2):
-    output_dir = os.path.join(root_dir, "primer_event")
+def main(info, len_primer_measure=2):
+    output_dir = os.path.join(DATA_DIR, "primer_event")
 
     # Load Krn Tokenizer
-    base_vocab_file = os.path.join(root_dir, "vocab", "base_vocab.txt")
+    base_vocab_file = os.path.join(DATA_DIR, "vocab", "base_vocab.txt")
     with open(base_vocab_file) as f:
         base_vocab = f.read().splitlines()
     tokenizer = BertTokenizer()
@@ -65,7 +65,7 @@ def main(root_dir, info, len_primer_measure=2):
     # Load Magenta's Relative MIDI-like Tokenizer
     rel_tokenizer = RelTokenizer(num_velocity_bins=1, add_eos=False)
 
-    event_dir = os.path.join(root_dir, "event")
+    event_dir = os.path.join(DATA_DIR, "event")
 
     for item_id, item in info.items():
 
@@ -113,7 +113,6 @@ def main(root_dir, info, len_primer_measure=2):
 
 if __name__ == '__main__':
     import json
-    root_dir = "../sonata-dataset"
 
     with open("../sonata-dataset/primer_event/info.json") as f:
         event_info = json.load(f)
@@ -184,4 +183,4 @@ if __name__ == '__main__':
     #            "end": {"measure": 82, "pos": '3/2'}},
     # }
 
-    main(root_dir, event_info)
+    main(event_info)

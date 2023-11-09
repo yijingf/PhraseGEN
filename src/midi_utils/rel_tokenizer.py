@@ -1,17 +1,17 @@
+""" Modulize Magenta's Music Transformer MIDI (note sequence) tokenization.
+
+"""
+
 import note_seq
 from music_encoders import MidiPerformanceEncoder
 
-NUM_VELOCITY_BINS = 32
-STEPS_PER_SECOND = 100
-MIN_PITCH = 0
-MAX_PITCH = 127
-EOS_ID = 1
-PAD_ID = 0
+from constants import EOS_ID, PAD_ID
+from constants import MIN_PITCH, MAX_PITCH, STEPS_PER_SECOND, MT_NUM_VELOCITY_BINS
 
 
 class RelTokenizer():
 
-    def __init__(self, num_velocity_bins=NUM_VELOCITY_BINS,
+    def __init__(self, num_velocity_bins=MT_NUM_VELOCITY_BINS,
                  steps_per_second=STEPS_PER_SECOND,
                  min_pitch=MIN_PITCH, max_pitch=MAX_PITCH,
                  eos_id=EOS_ID, pad_id=PAD_ID, add_eos=True):

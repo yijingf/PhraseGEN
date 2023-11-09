@@ -23,21 +23,21 @@ bash preprocess_pipeline.sh ../../sonata-dataset
 
     Extract music events by measures and store as JSON. 
     ```
-    python3 parse_score.py --root_dir ../../sonata-dataset
+    python3 parse_score.py
     ```
 
 3. Phrase Segmentaion
 
     Segment events into 8-bar phrases and 2-bar hop size.
     ```
-    python3 segment.py --root_dir ../../sonata-dataset --len_phrase 8 --hop_size 2
+    python3 segment.py --len_phrase 8 --hop_size 2
     ```
 
 4. Make Dataset
     
     Generate train/validation dataset with .
     ```
-    python3 dataset.py --root_dir ../../sonata-dataset --split_ratio 0.8 --seq_len 512 --pad_bar
+    python3 dataset.py --split_ratio 0.8 --seq_len 512 --pad_bar
     ``` 
 
 ### Phrase Annotation (Optional)
@@ -55,4 +55,3 @@ bash preprocess_pipeline.sh ../../sonata-dataset
     ```
     python3 align_annotation.py [--label path/to/manual/annotation] [--mapping path/to/section/index/mapping] [--output path/to/output/file]
     ```
-

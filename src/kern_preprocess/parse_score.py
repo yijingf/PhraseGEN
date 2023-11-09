@@ -1,5 +1,5 @@
 """
-Extract notes (grouped by measures), tempo, time signature from kern file in root_dir/krn/composer or music xml in root_dir/mxml/composer in root_dir/krn, and output a JSON file in root_dir/event/composer with the following structure:
+Extract notes (grouped by measures), tempo, time signature from kern file in DATA_DIR/krn/composer or music xml in DATA_DIR/mxml/composer in DATA_DIR/krn, and output a JSON file in DATA_DIR/event/composer with the following structure:
 {
     "note": {
         `measure_id`:{
@@ -26,7 +26,7 @@ Method (2) is recommended because music21 has various unexpected issues when par
 
 NOTE: The current version has issue parsing repetition sign when the first volta is not complete. The only fix is to append rest notes to the incomplete volta. See `README.md` and Table-2 in `Appendix.mx` for more details.
 
-Usage: python3 parse_score.py [--root_dir ../../sonata_dataset]
+Usage: python3 parse_score.py
 
 """
 
@@ -35,6 +35,11 @@ import math
 import music21
 from fractions import Fraction
 from music21 import key, stream, pitch
+
+# Constants
+import sys
+sys.path.append("..")
+from kern_utils.constants import DATA_DIR
 
 
 def is_kern_note(entry):
@@ -612,18 +617,12 @@ def event_extract(krn_file, mxml_file=None, sanity_check=True):
 if __name__ == "__main__":
     import os
     import json
-    import argparse
     from glob import glob
     from tqdm import tqdm
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--root_dir", dest="root_dir", type=str,
-                        default="../../sonata-dataset/", help="Root directory.")
-    args = parser.parse_args()
-
-    krn_dir = os.path.join(args.root_dir, "krn")
-    mxml_dir = os.path.join(args.oot_dir, "mxml")
-    event_dir = os.path.join(args.root_dir, "event")
+    krn_dir = os.path.join(DATA_DIR, "krn")
+    mxml_dir = os.path.join(DATA_DIR, "mxml")
+    event_dir = os.path.join(DATA_DIR, "event")
 
     composers = os.listdir(krn_dir)
     for composer in composers:  # 'mozart', 'haydn', 'beethoven', 'scarlatti'

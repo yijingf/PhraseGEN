@@ -1,5 +1,5 @@
 """
-Segment events in root_dir/event/composer into phrases with a fixed length and hop-size in root_dir/segment/composer.
+Segment events in DATA_DIR/event/composer into phrases with a fixed length and hop-size in DATA_DIR/segment/composer.
 
 We assume that time signature and tempo would not change within a phrase. Therefore, we start a new phrase once a time signature and tempo change is identified. 
 
@@ -10,7 +10,7 @@ All musical events are normalized:
 
 Usage: 
 # Segment into 8-bar phrases with 2-bar hop size
-python3 segment.py [--root_dir "../../sonata_dataset"] [--len_phrase 8] [--hop_size 2]
+python3 segment.py [--len_phrase 8] [--hop_size 2]
 
 """
 
@@ -21,6 +21,9 @@ import sys
 sys.path.append("..")
 from kern_utils.event import concat_event, remove_repeat, get_sub_sect_event
 from kern_utils.common import load_event, normalize_ts_tp, normalize_event, token2v
+
+# Constants
+from kern_utils.constants import DATA_DIR
 
 
 def merge_section_name(pattern):
@@ -222,16 +225,14 @@ if __name__ == "__main__":
     from tqdm import tqdm
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root_dir", dest="root_dir", type=str,
-                        default="../../sonata-dataset/", help="Root directory.")
     parser.add_argument("--len_phrase", dest="len_phrase", type=int,
                         default=8, help="Max phrase length.")
     parser.add_argument("--hop_size", dest="hop_size", type=int,
                         default=2, help="Hop size.")
     args = parser.parse_args()
 
-    event_dir = os.path.join(args.root_dir, "event")
-    seg_dir = os.path.join(args.root_dir, "segment")
+    event_dir = os.path.join(DATA_DIR, "event")
+    seg_dir = os.path.join(DATA_DIR, "segment")
 
     composers = os.listdir(event_dir)
     for composer in composers:  # 'mozart', 'haydn', 'beethoven', 'scarlatti'

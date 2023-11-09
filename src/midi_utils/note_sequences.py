@@ -19,9 +19,9 @@ import itertools
 
 from typing import MutableMapping, MutableSet, Optional, Sequence, Tuple
 
-from .event_codec import Codec, Event
-from .run_length_encoding import EventEncodingSpec
-from .vocabularies import velocity_to_bin, num_velocity_bins_from_codec, bin_to_velocity
+from event_codec import Codec, Event
+from run_length_encoding import EventEncodingSpec
+from vocabularies import velocity_to_bin, num_velocity_bins_from_codec, bin_to_velocity
 
 import note_seq
 

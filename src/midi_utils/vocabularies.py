@@ -17,11 +17,11 @@
 import dataclasses
 import math
 
-from typing import Callable, Sequence
-from .event_codec import Codec, EventRange
-
 import note_seq
+from typing import Callable, Sequence
+
 # import tensorflow as tf
+from event_codec import Codec, EventRange
 
 
 DECODED_EOS_ID = -1
