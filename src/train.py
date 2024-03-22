@@ -39,7 +39,7 @@ def build_model(vocab_size, model_type='mass', max_len=512, pad_id=0):
 
         model = RobertaForMaskedLM(config)
 
-    elif model_type == 'mass':
+    elif model_type == 'mass' or model_type == 'encoder-decoder':
         from transformers import EncoderDecoderModel
         from transformers import BertConfig, EncoderDecoderConfig
 
@@ -47,14 +47,16 @@ def build_model(vocab_size, model_type='mass', max_len=512, pad_id=0):
                                     num_hidden_layers=4,
                                     hidden_size=768,
                                     num_attention_heads=8,
-                                    intermediate_size=1024,)
+                                    intermediate_size=1024,
+                                    max_position_embeddings=max_len,)
         # position_embedding_type='relative_key_query')
 
         config_decoder = BertConfig(vocab_size=vocab_size,
                                     num_hidden_layers=4,
                                     hidden_size=768,
                                     num_attention_heads=8,
-                                    intermediate_size=1024,)
+                                    intermediate_size=1024,
+                                    max_position_embeddings=max_len,)
         # position_embedding_type='relative_key_query')
 
         config = EncoderDecoderConfig.from_encoder_decoder_configs(config_encoder,
@@ -91,10 +93,16 @@ def main(train_path, eval_path,
 
     # Todo: MIDI Tokenizer
 
-    if model_type not in ['bert', 'roberta', 'mass']:  # non-masking model
+    if model_type not in ['bert', 'roberta', 'mass', 'encoder-decoder']:  # non-masking model
         train_dataset = BaseDataset(train_path, seq_len=max_len)
         eval_dataset = BaseDataset(eval_path, seq_len=max_len)
-        data_collator = BaseDataCollator(max_len=max_len)
+
+        if model_type == 'encoder-decoder':
+            from data_loader import MassDataCollator
+            data_collator = MassDataCollator(mask_pad=mask_pad, pad=False)
+        else:
+            data_collator = BaseDataCollator(max_len=max_len,
+                                             mask_pad=mask_pad)
 
     elif model_type == 'bert':
         from data_loader import MaskedDataset, BertDataCollator
