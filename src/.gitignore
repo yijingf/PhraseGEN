@@ -1,4 +1,5 @@
 .DS_Store
 *.ipynb
 .ipynb_checkpoints
+train_config
 __pycache__
