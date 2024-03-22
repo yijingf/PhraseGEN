@@ -10,32 +10,37 @@ import scipy.io.wavfile
 import sys
 sys.path.append("..")
 from kern_utils.common import load_event
-from kern_utils.event import unroll_repeat, event_to_pm
+from kern_utils.event import unroll_score, event_to_pm
 
 # Constant
 from kern_utils.constants import DATA_DIR
 
 
-def main(event_file, volta_only=True, fs=44100.0):
+def main(event_file, output_dir, repeat_mode="volta_only", to_audio=True, fs=44100.0):
 
+    composer = os.path.basename(os.path.dirname(event_file))
     prefix = os.path.basename(event_file).split(".")[0]
-    midi_file = os.path.join(DATA_DIR, "rendered_midi", f"{prefix}.mid")
-    mapping_file = os.path.join(DATA_DIR, "mapping", f"{prefix}.json")
-    audio_file = os.path.join(DATA_DIR, "audio", f"{prefix}.wav")
+
+    os.makedirs(os.path.join(output_dir, composer), exist_ok=True)
+
+    midi_file = os.path.join(output_dir, composer, f"{prefix}.mid")
+    mapping_file = os.path.join(output_dir, composer, f"{prefix}.json")
+    audio_file = os.path.join(output_dir, composer, f"{prefix}.wav")
 
     # Render event to midi
     event, struct = load_event(event_file)
-    unrolled_event, idx_mapping = unroll_repeat(event, struct, volta_only)
+    unrolled_event, idx_mapping = unroll_score(event, struct, repeat_mode)
     pm, sect_onset = event_to_pm(unrolled_event)
 
     pm.write(midi_file)
 
-    # Render midi to audio
-    audio = pm.fluidsynth(fs=float(fs))
-    scipy.io.wavfile.write(audio_file, int(fs), audio)
-
     with open(mapping_file, "w") as f:
         json.dump({"idx_mapping": idx_mapping, "onset": sect_onset}, f)
+
+    if to_audio:
+        # Render midi to audio
+        audio = pm.fluidsynth(fs=float(fs))
+        scipy.io.wavfile.write(audio_file, int(fs), audio)
 
     return
 
@@ -47,13 +52,16 @@ if __name__ == "__main__":
     parser.add_argument("--event", dest="event_file", type=str,
                         help="Input event file name.")
     parser.add_argument("--output_dir", dest="output_dir", type=str,
-                        help="Output path.")
+                        default=f"{DATA_DIR}/rendered_midi",
+                        help="Output path. Defaults to DATA_DIR/rendered_mid.")
     parser.add_argument("--fs", dest="fs", type=float,
                         default=44100.0, help="Rendered audio sampling frequency.")
-    parser.add_argument("--unroll_all", dest="unroll_all",
-                        action="store_false", help="Unroll all repeats. Default to False.")
+    parser.add_argument("--unroll_mode", dest="unroll_mode", type=str,
+                        default="volta_only", help="Unroll score mode. `volta_only`, `no_repeat` or `full`. Default to `volta_only`.")
+    parser.add_argument("--to_audio", dest="to_audio",
+                        action="store_true", help="Render to audio. Defaults to false.")
 
     args = parser.parse_args()
 
-    volta_only = not args.unroll_all
-    main(args.event_file, args.output_dir, volta_only=volta_only, fs=args.fs)
+    main(args.event_file, args.output_dir,
+         repeat_mode=args.unroll_mode, fs=args.fs, to_audio=args.to_audio)

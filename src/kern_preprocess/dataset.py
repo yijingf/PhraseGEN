@@ -318,8 +318,8 @@ if __name__ == "__main__":
                         default=0.8, help="Train/validation split ratio. Default to 0.8.")
     parser.add_argument("--seq_len", dest="sequence_len", type=float,
                         default=512, help="Max sequence length. Default to 512.")
-    parser.add_argument("--pad_bar", dest="pad_bar",
-                        action="store_false", help="Apply bar-level padding. Default to False.")
+    parser.add_argument("--no_pad_bar", dest="no_pad_bar",
+                        action="store_true", help="Without bar-level padding. Default to True.")
 
     args = parser.parse_args()
     main(args.split_ratio, args.seq_len, args.pad_bar)

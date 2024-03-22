@@ -10,12 +10,40 @@ from decode import decode_token_to_pm
 from common import trim_event, token2v, normalize_ts
 
 
-def unroll_repeat(event, struct, volta_only=True):
+def no_repeat_pattern(pattern):
+    norep_pattern = [pattern[0]]
+    last_sub_sect_name = pattern[0]
+
+    for sub_sect_name in pattern[1:]:
+
+        if sub_sect_name == last_sub_sect_name:
+            continue
+
+        if sub_sect_name[0] != last_sub_sect_name[0]:
+            norep_pattern.append(sub_sect_name)
+
+        elif len(sub_sect_name) > len(norep_pattern[-1]):
+            norep_pattern.append(sub_sect_name)
+
+        elif len(sub_sect_name) == len(norep_pattern[-1]):
+            norep_pattern[-1] = sub_sect_name
+
+        last_sub_sect_name = sub_sect_name
+
+    return norep_pattern
+
+
+def unroll_score(event, struct, repeat_mode="volta_only"):
     """Unroll repeats according to the section pattern in event_file.
+    Example: 
+    pattern = ['A', 'A1, 'A', 'A2', 'B', 'B'], returns 
+    1. ['A', 'A1', 'A', 'A2', 'B'] when repeat_mode="volta_only"
+    2. ['A', 'A1', 'A', 'A2', 'B', 'B'] when repeat_mode = "full"
+    3. ['A', 'A1', 'B'] when repeat = "no_repeat
 
     Args:
         event_file (str): Path to event file.
-        volta_only (bool, optional): Unroll repeats only if there is volta bracket. Defaults to True.
+        repeat mode (str, optional): `volta_only`, `no_repeat` or `full`. See examples. Defaults to `volta_only`.
     """
 
     # Sort sections
@@ -23,11 +51,16 @@ def unroll_repeat(event, struct, volta_only=True):
                     key=lambda x: (x[1]['idx'], x[1]['onset']))
     sub_sect_event = get_sub_sect_event(event, onsets)
 
-    if volta_only:
+    if repeat_mode == "no_repeat":
+        sects = no_repeat_pattern(struct['pattern'])
+    elif repeat_mode == "volta_only":
         # Unroll repeats only if there is a volta.
         sects = remove_repeat(struct['pattern'])
-    else:
+    elif repeat_mode == "full":
         sects = struct['pattern']
+    else:
+        raise ValueError(
+            "Please set `repeat_mode` to 'volta_only', 'no_repeat' or 'full'.")
 
     unrolled_event, idx_mapping = concat_event(sub_sect_event,
                                                sects,
@@ -131,16 +164,16 @@ def concat_event(sub_sect_event, sects, sect_onset_dict, i_measure=0):
 
     for i_sect, sub_sect in enumerate(sects):
 
-        event = sub_sect_event[sub_sect]
-        i_st = min(event)
-        i_ed = max(event)
+        tmp_event = sub_sect_event[sub_sect]
+        i_st = min(tmp_event)
+        i_ed = max(tmp_event)
 
         for i in range(i_st, i_ed + 1):
             if i_measure in res:
-                res[i_measure]['event'] += deepcopy(event[i]['event'])
+                res[i_measure]['event'] += deepcopy(tmp_event[i]['event'])
             else:
                 idx_mapping[i_measure] = i
-                res[i_measure] = deepcopy(event[i])
+                res[i_measure] = deepcopy(tmp_event[i])
             i_measure += 1
 
         if i_sect < len(sects) - 1:
@@ -152,19 +185,20 @@ def concat_event(sub_sect_event, sects, sect_onset_dict, i_measure=0):
 
 
 def get_sub_sect_event(event, sub_sect_onset):
-    sub_sect_onset.append(('Fin', {"idx": max(event) + 1,
-                                   "onset": "o-0"}))
+    onsets = deepcopy(sub_sect_onset)
+    onsets.append(('Fin', {"idx": max(event) + 1,
+                           "onset": "o-0"}))
 
     # Get events for each sub section
     sub_sect_event = {}
-    for i, v in enumerate(sub_sect_onset[:-1]):
+    for i, v in enumerate(onsets[:-1]):
         sub_sect = v[0]
 
         i_st = v[1]['idx']
         offset_st = token2v(v[1]['onset'])
 
-        i_ed = sub_sect_onset[i + 1][1]['idx']
-        offset_ed = token2v(sub_sect_onset[i + 1][1]['onset'])
+        i_ed = onsets[i + 1][1]['idx']
+        offset_ed = token2v(onsets[i + 1][1]['onset'])
 
         sub_sect_event[sub_sect] = trim_event(event,
                                               start=(i_st, offset_st),
@@ -213,7 +247,7 @@ def event_to_pm(event):
             ts_frac = Fraction(ts[:-2]) / 4
         else:
             ts_frac = Fraction(ts)
-        t_measure = int(ts_frac * 4) * 60 / tp
+        t_measure = float(ts_frac * 4) * 60 / tp
         next_t_offset += t_measure
 
     if len(tokens):

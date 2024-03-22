@@ -4,9 +4,10 @@ from fractions import Fraction
 
 from common import token2v
 
-default_time_signature = '4/4'
-default_tempo = 120
-default_velocity = 64
+# Constants
+DEFAULT_TIME_SIGNATURE = '4/4'
+DEFAULT_TEMPO = 120
+DEFAULT_VELOCITY = 75
 
 
 def pitch_name_to_pm_pitch(pitch_name):
@@ -111,13 +112,13 @@ def decode_token_to_pm(tokens, bar_eos_token='sep', bar_limit=False, t_offset=0)
     ts, tp, events = decode_token_to_event(tokens, bar_eos_token)
 
     if ts is None:
-        warnings.warn(f"No time signature. Set to {default_time_signature}")
-        ts_frac = Fraction(default_time_signature)
+        warnings.warn(f"No time signature. Set to {DEFAULT_TIME_SIGNATURE}")
+        ts_frac = Fraction(DEFAULT_TIME_SIGNATURE)
         ts = (ts_frac.numerator, ts_frac.denominator)
 
     if not tp:
-        warnings.warn(f"No tempo. Set to {default_tempo}")
-        tp = default_tempo
+        warnings.warn(f"No tempo. Set to {DEFAULT_TEMPO}")
+        tp = DEFAULT_TEMPO
 
     t_quarter_note = 60 / tp
 
@@ -136,7 +137,7 @@ def decode_token_to_pm(tokens, bar_eos_token='sep', bar_limit=False, t_offset=0)
             t_st = (onset + i * ts_num) * t_quarter_note + t_offset
             t_ed = t_st + duration * t_quarter_note
             pitch = pitch_name_to_pm_pitch(pitch_name)
-            note = pretty_midi.Note(default_velocity, pitch, t_st, t_ed)
+            note = pretty_midi.Note(DEFAULT_VELOCITY, pitch, t_st, t_ed)
             inst.notes.append(note)
 
     pm = pretty_midi.PrettyMIDI()

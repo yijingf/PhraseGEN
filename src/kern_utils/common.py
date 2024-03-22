@@ -8,7 +8,7 @@ from music21 import pitch
 from fractions import Fraction
 
 # Constants
-from constants import PITCH_OFFSET_DICT, TEMPO_BIN
+from kern_utils.constants import PITCH_OFFSET_DICT, TEMPO_BIN
 
 
 def token2v(token):
@@ -101,8 +101,10 @@ def normalize_event(event):
         event (_type_): _description_
     """
 
+    i_st = min(event)
+    pitch_offset = PITCH_OFFSET_DICT[event[i_st]['key'].split()[0]]
+
     for measure in event.values():
-        pitch_offset = PITCH_OFFSET_DICT[measure['key'].split()[0]]
         ratio = ts_tp_ratio(measure['time_signature'], measure['tempo'])
 
         for i, token in enumerate(measure['event']):
@@ -148,21 +150,41 @@ def trim_event(measures, start=(0, 0), end=(0, 0)):
         seg_measures[i_measure] = deepcopy(measures[i_measure])
 
     # Add notes from last measure
-    if offset_ed > 0:
+    flag = 1
+    if offset_ed > 0 and len(measures[i_ed]['event']):
         for i_token, token in enumerate(measures[i_ed]['event']):
             if token[0] == 'o':
                 if token2v(token) >= offset_ed:
+                    flag = 0
                     break
 
         seg_measures[i_ed] = deepcopy(measures[i_ed])
-        seg_measures[i_ed]['event'] = seg_measures[i_ed]['event'][:i_token]
+        seg_measures[i_ed]['event'] = seg_measures[i_ed]['event'][:i_token + flag]
 
     # Remove redundant notes from the first measure
-    if offset_st > 0:
+    if offset_st > 0 and len(measures[i_st]['event']):
         for i_token, token in enumerate(measures[i_st]['event']):
             if token[0] == 'o':
                 if token2v(token) >= offset_st:
                     break
 
-        seg_measures[i_st]['event'] = seg_measures[i_st]['event'][i_token:]
+        if i_token < len(measures[i_st]['event']) - 1:
+            seg_measures[i_st]['event'] = seg_measures[i_st]['event'][i_token:]
+        else:
+            seg_measures[i_st]['event'] = []
     return seg_measures
+
+
+def get_t_bar(time_signature, tempo, **kwargs):
+    """Get bar duration in seconds
+
+    Args:
+        time_signature (str): time signature, i.e. "4/4".
+        tempo (str): tempo
+    """
+    normalized_tempo = int(tempo / 12) * 12  # To avoid weird ticks
+    if len(time_signature.split('/')) > 2:
+        time_signature = Fraction(
+            time_signature[:-2]) / int(time_signature[-1])
+    t_bar = Fraction(time_signature) * 4 * 60 / normalized_tempo
+    return t_bar
