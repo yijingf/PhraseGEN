@@ -86,7 +86,7 @@ def entries_has_note(entries):
     return has_note
 
 
-def normalize_pitch(pitch_str):
+def normalize_pitch_name(pitch_str):
     """Normalize equivalent pitch strings, i.e. D- and C#, to identical annotation.
 
     Args:
@@ -406,7 +406,7 @@ def part_event_extract(part):
 
     # Extract events from each measure/bar
     # NOTE: Assume that the measures are ordered by offset
-    for i, measure in enumerate(measures):
+    for measure in measures:
 
         # time signature
         if measure.timeSignature and measure.timeSignature.ratioString != ts.ratioString:
@@ -450,7 +450,7 @@ def part_event_extract(part):
 
                 for chord_note in note.notes:
                     pitch_str = chord_note.pitch.nameWithOctave
-                    pitch_name = normalize_pitch(pitch_str)
+                    pitch_name = normalize_pitch_name(pitch_str)
                     note_duration = Fraction(chord_note.duration.quarterLength)
 
                     if not chord_note.tie:
@@ -484,7 +484,7 @@ def part_event_extract(part):
 
             else:
                 pitch_str = note.pitch.nameWithOctave
-                pitch_name = normalize_pitch(pitch_str)
+                pitch_name = normalize_pitch_name(pitch_str)
                 note_duration = Fraction(note.duration.quarterLength)
 
                 if not note.tie:
@@ -519,7 +519,7 @@ def part_event_extract(part):
     return event
 
 
-def event_extract(krn_file, mxml_file=None, sanity_check=True):
+def event_extract(krn_file, mxml_file=None, sanity_check=True, hand_part='both'):
 
     # Load music scores from .xml or .krn
     if not mxml_file:
@@ -532,10 +532,19 @@ def event_extract(krn_file, mxml_file=None, sanity_check=True):
     init_sect = krn_attr["pattern"][0]
     krn_measure_offset = krn_attr["attr"][init_sect]["idx"]
 
+    # Check hand part input
+    assert hand_part in ['left', 'right', 'both'], "Invalid hand part."
+
     # Extract notes
     event = {}
     measure_offset = 0
-    for part in parts:
+    for i_part, part in enumerate(parts):
+
+        if hand_part == 'left' and i_part == 0:
+            continue
+        elif hand_part == 'right' and i_part == 1:
+            continue
+
         event_part = part_event_extract(part)
         measure_offset = krn_measure_offset - min(event_part.keys())
 
@@ -624,8 +633,7 @@ if __name__ == "__main__":
     mxml_dir = os.path.join(DATA_DIR, "mxml")
     event_dir = os.path.join(DATA_DIR, "event")
 
-    composers = os.listdir(krn_dir)
-    for composer in composers:  # 'mozart', 'haydn', 'beethoven', 'scarlatti'
+    for composer in ['mozart', 'haydn', 'beethoven', 'scarlatti']:
 
         print(composer)
         os.makedirs(os.path.join(event_dir, composer), exist_ok=True)

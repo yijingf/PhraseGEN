@@ -30,7 +30,9 @@ def main(event_file, output_dir, repeat_mode="volta_only", to_audio=True, fs=441
     # Render event to midi
     event, struct = load_event(event_file)
     unrolled_event, idx_mapping = unroll_score(event, struct, repeat_mode)
-    pm, sect_onset = event_to_pm(unrolled_event)
+
+    # render to midi with normalized tempo by setting tp_to_bin=True
+    pm, sect_onset = event_to_pm(unrolled_event, tp_to_bin=True)
 
     pm.write(midi_file)
 
