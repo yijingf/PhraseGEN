@@ -18,7 +18,7 @@ import json
 from fractions import Fraction
 
 import sys
-sys.path.append("..")
+sys.path.append("../src")
 from kern_utils.event import concat_event, remove_repeat, get_sub_sect_event
 from kern_utils.common import load_event, normalize_ts_tp, normalize_event, token2v
 

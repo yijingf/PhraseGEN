@@ -1,0 +1,343 @@
+[
+    {
+        "composer": "mozart",
+        "title": "sonata03-3",
+        "# bar": [
+            43
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "split measure 43 into 4 measures; reindex the following measures"
+    },
+    {
+        "composer": "mozart",
+        "title": "sonata09-3",
+        "# bar": [
+            173,
+            174
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove redundant notes in measure 173; add 1.5 quarter note of rest in measure 174"
+    },
+    {
+        "composer": "mozart",
+        "title": "sonata13-03",
+        "# bar": [
+            198,
+            199
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove redundant notes in measure 198, 199"
+    },
+    {
+        "composer": "mozart",
+        "title": "sonata14-2",
+        "# bar": [
+            29,
+            30,
+            51,
+            52
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove redundant notes in measure 29, 30, 51, 52"
+    },
+    {
+        "composer": "scarlatti",
+        "title": "L013K060",
+        "# bar": [
+            25
+        ],
+        "issue": "missing section name",
+        "fix": "add '*>B\t*>B\t*>B' after '=25:|!|:\t=25:|!|:\t=25:|!|:'"
+    },
+    {
+        "composer": "scarlatti",
+        "title": "L052K165",
+        "# bar": [],
+        "issue": "incorrect reptetition pattern",
+        "fix": "'[A,A1,A,A2,B,B2,B,B2]'->'[A,A1,A,A2,B,B1,B,B2]'"
+    },
+    {
+        "composer": "scarlatti",
+        "title": "L503K513",
+        "# bar": [
+            58
+        ],
+        "issue": "incorrect notes",
+        "fix": "'(16cc 16 cccLL' -> '(16cc 16cccLL'"
+    },
+    {
+        "composer": "scarlatti",
+        "title": "L400K360",
+        "# bar": [],
+        "issue": "incorrect repetition pattern",
+        "fix": "'[A,A,B,B]' -> '[A,A1,A,B,B]'"
+    },
+    {
+        "composer": "scarlatti",
+        "title": "L481K025",
+        "# bar": [
+            44,
+            45,
+            46,
+            86,
+            87
+        ],
+        "issue": "local tempo change",
+        "fix": "remove local tempo change in these measures"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata03-1",
+        "# bar": [
+            232
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove redundant notes in measure 232"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata13-4",
+        "# bar": [
+            265
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove redundant notes in measure 265; remove '=\t=\t=\t=' in measure 266"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata14-3",
+        "# bar": [
+            188
+        ],
+        "issue": "parsing error",
+        "fix": "remove lines between and '*\t*cue\t*' and '*\t*Xcue\t*'"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata15-3",
+        "# bar": [
+            24
+        ],
+        "issue": "incorrect note duration",
+        "fix": "correct note duration: '4DD\\ 4D\\\t4d` F#<`>\t.' -> '4DD\\ 4D\\\t4d` 4F#<`>\t.'"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata16-2",
+        "# bar": [
+            26,
+            90
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove redundant notes in measure 26, 90"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata17-1",
+        "# bar": [
+            1,
+            2,
+            3,
+            6,
+            7,
+            8,
+            9,
+            97,
+            103,
+            147,
+            152,
+            153,
+            156,
+            157,
+            163
+        ],
+        "issue": "local tempo change",
+        "fix": "remove local tempo change in these measures and add '*MM168\t*MM168\t*' after '*M4/4\t*M4/4\t*'"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata18-3",
+        "# bar": [
+            20
+        ],
+        "issue": "syntax error",
+        "fix": "'==20\t==20\t==20' -> '=||\t=||\t=||'; '=\t=\t=' -> '=20\t=20\t=20' in measure 20"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata18-3",
+        "# bar": [
+            27
+        ],
+        "issue": "incomplete measure",
+        "fix": "'=28:|!|:\t=28:|!|:\t=28:|!|:' -> '=:|!|:\t=:|!|:\t=:|!|:'; '8r\t8r\t.' -> '4r\t4r\t.'; reindex measure by accordingly starting from measure 28"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata18-3",
+        "# bar": [
+            60
+        ],
+        "issue": "incomplete measure",
+        "fix": "add '8ryy\t8ryy\t8ryy\t.' to measure 60 (before reindexing)"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata18-4",
+        "# bar": [],
+        "issue": "syntax error",
+        "fix": "move '*>A\t*>A\t*>A' inside measure 1, the line after '=1!|:\t=1!|:\t=1!|:"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata21-3",
+        "# bar": [
+            402
+        ],
+        "issue": "incorrect measure index",
+        "fix": "reindex all measures after measure 402"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata23-2",
+        "# bar": [
+            99
+        ],
+        "issue": "syntax error",
+        "fix": "add duration to 'e-' in measure 99, '8g-L e-\t16aa-LL\t8cc 8ee-L\t>' -> '8g-L 8e-\t16aa-LL\t8cc 8ee-L\t>'"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata24-1",
+        "# bar": [
+            4
+        ],
+        "issue": "incorrect time signature",
+        "fix": "set time signature to '*M4/4\t*M4/4\t*' and tempo to '*MM120\t*MM120\t*'; double the duration of notes in first four measuares; add a quarter note reset '4r\t4ryy\t4r\t.' to measure 4"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata24-2",
+        "# bar": [
+            177
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove measure 177, and reindex the rest measures accordingly"
+    },
+    {
+        "composer": "haydn",
+        "title": "sonata34-1",
+        "# bar": [
+            52,
+            178
+        ],
+        "issue": "local tempo change",
+        "fix": "remove '*MM60\t*MM60\t*MM60' in measure 52 and 178"
+    },
+    {
+        "composer": "haydn",
+        "title": "sonata42-3",
+        "# bar": [
+            57
+        ],
+        "issue": "incorrect measure index for measures with repeat marks in them",
+        "fix": "remove the last 8th note reset, '8r\t8r\t.', in measure 56; remove '57' from repeat marks in measure 56; reindex all the measures after measure 56"
+    },
+    {
+        "composer": "haydn",
+        "title": "sonata59-1",
+        "# bar": [
+            131
+        ],
+        "issue": "extra beats in a measure",
+        "fix": "remove grace notes between '*\t*cue\t*' and '*\t*Xcue\t*'; remove time signature change in measure 131 and 132"
+    },
+    {
+        "composer": "haydn",
+        "title": "sonata62-2",
+        "# bar": [],
+        "issue": "syntax error",
+        "fix": "add duration for every note in every chord"
+    },
+    {
+        "composer": "haydn",
+        "title": "sonata34-1",
+        "# bar": [
+            68
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '8ryy\t8ryy\t.' to measure 68"
+    },
+    {
+        "composer": "mozart",
+        "title": "sonata11-3",
+        "# bar": [
+            96
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '4ryy\t4ryy\t.' to measure 96"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata01-4",
+        "# bar": [
+            57
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '2ryy\t2ryy\t.' to measure 57; increase index by 1 after this measure"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata04-3",
+        "# bar": [
+            96
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "'=96:|!|:\t=96:|!|:\t=96:|!|:' -> '=96:|!\t=96:|!\t=96:|!'; add '2r\t2r\t.', '=|:\t=|:\t=|:', '*>C\t*>C\t*>C' after '!!LO:TX:a:B:t=Minore"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata02-1",
+        "# bar": [
+            117
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '8ryy\t8ryy\t.' to measure 117"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata03-3",
+        "# bar": [
+            64
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '4.ryy\t4.ryy\t.' to measure 64"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata06-1",
+        "# bar": [
+            66
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '8ryy\t8ryy\t.' to measure 66"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata12-2",
+        "# bar": [
+            91
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '4ryy\t4ryy\t4ryy\t4ryy\t.' to measure 91"
+    },
+    {
+        "composer": "beethoven",
+        "title": "sonata13-2",
+        "# bar": [
+            79
+        ],
+        "issue": "incomplete measure in 1st ending brackets",
+        "fix": "add '4ryy\t4ryy\t.' to measure 79"
+    }
+]

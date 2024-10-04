@@ -1,5 +1,5 @@
 """
-Make dataset for MASS model.
+Make dataset for PhraseGEN model. This script split the data into train/validation set, and generate bar-level padded dataset. 
 
 Output:
 train/validation dataset as JSON file in DATA_DIR/dataset with the following structure:
@@ -15,7 +15,7 @@ where `center_mask_idx` are indices of masked tokens in the continuous measures 
 This script also generates a base vocabluary list in DATA_DIR/vocab/base_vocab.txt of normalized music event tokens. 
 
 Usage:
-# Generate dataset 80% of data as training set, sequence length of 512, bar-level padded.
+# split train/validation dataset by 0.8/0.2, generate bar-level padded sequence with a maximum length of 512
 python3 dataset.py [--split_ratio 0.8] [--seq_len 512] [--pad_bar]
 
 """
@@ -29,7 +29,7 @@ from glob import glob
 from collections import Counter
 
 import sys
-sys.path.append("..")
+sys.path.append("../src")
 from kern_utils.common import token2v
 from kern_utils.tokenizer import BertTokenizer
 from kern_utils.event import concat_measure, mask_measure_to_idx

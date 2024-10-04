@@ -24,7 +24,7 @@ Humdrum file could be loaded
 (2) as .xml converted by `hum2xml`.
 Method (2) is recommended because music21 has various unexpected issues when parsing .krn file.
 
-NOTE: The current version has issue parsing repetition sign when the first volta is not complete. The only fix is to append rest notes to the incomplete volta. See `README.md` and Table-2 in `Appendix.mx` for more details.
+NOTE: The current version has issue parsing repetition sign when the first volta is not complete. The only fix is to append rest notes to the incomplete volta. See `README.md` and `./krn/data_cleaning.json` for more details.
 
 Usage: python3 parse_score.py
 
@@ -38,7 +38,7 @@ from music21 import key, stream, pitch
 
 # Constants
 import sys
-sys.path.append("..")
+sys.path.append("../src")
 from kern_utils.constants import DATA_DIR
 
 

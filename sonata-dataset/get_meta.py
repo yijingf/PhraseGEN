@@ -1,31 +1,26 @@
 """
-Crawl .midi files of sonatas from Mozart, Beethoven, Haydn, Scarlatti in the Kern Score Database https://kern.humdrum.org/cgi-bin/browse?l=/users/craig/classical, from the following pages
+Get classical piano sonata metadata from KernScores Library and download corresponding midi files (optional). Metadata are stored as `./info/[composer].csv`; midi files, if downloaded, are stored in `./midi/[composer]`.
 
-    Mozart: https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/mozart/piano/sonata
-    Beethoven: https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/beethoven/piano/sonata
-    Haydn: https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/haydn/keyboard/uesonatas
-    Scarlatti: https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/scarlatti/longo
-
-By default, `.midi` files are stored in `./midi/[composer]`, urls and other info are stored in `./info/[composer].csv`.
-
-Usage: python3 midi_crawl.py
-
+Usage: 
+python3 get_meta.py or python3 get_meta.py --download_midi
 """
 
 import os
 import urllib
 import requests
 import pandas as pd
-
 from tqdm import tqdm
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
-
 INFO_DIR = "./info"
-MIDI_DIR = "./midi"
-os.makedirs(INFO_DIR, exist_ok=True)
-os.makedirs(MIDI_DIR, exist_ok=True)
+MIDI_DIR = "./downloaded_midi"
+
+COMPOSER_URLS = {
+    "mozart": "https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/mozart/piano/sonata",
+    "beethoven": 'https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/beethoven/piano/sonata',
+    "haydn": "https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/beethoven/piano/sonata", "scarlatti": "https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/scarlatti/longo"
+}
 
 
 def normalize(items):
@@ -132,7 +127,7 @@ def crawl(url):
     return df
 
 
-def download_midi(df, midi_dir):
+def fetch_midi(df, midi_dir):
     """Loop through MIDI urls in df dataframe and download them.
 
     Args:
@@ -145,42 +140,48 @@ def download_midi(df, midi_dir):
     return
 
 
-def main(url, midi_dir, filename=None):
+def main(download_midi=True):
 
-    # Crawl MIDI for Mozart, Beethoven, Haydn
-    urls = ['https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/mozart/piano/sonata',
-            'https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/beethoven/piano/sonata',
-            'https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/haydn/keyboard/uesonatas',
-            ]
-    composers = ['mozart', 'beethoven', 'haydn']
+    os.makedirs(INFO_DIR, exist_ok=True)
+    if download_midi:
+        os.makedirs(MIDI_DIR, exist_ok=True)
 
-    for url, composer in zip(*(urls, composers)):
-
-        midi_dir = os.path.join(MIDI_DIR, composer)
-
-        if os.path.exists(midi_dir):
-            print(f"{midi_dir} already exists.")
-            continue
-
-        os.makedirs(midi_dir)
+    # Get metadata for Mozart, Beethoven, Haydn
+    for composer in ['mozart', 'beethoven', 'haydn']:
+        url = COMPOSER_URLS[composer]
 
         # Crawl MIDI urls and other info into a dataframe.
         df = crawl(url)
         filename = os.path.join(INFO_DIR, f'{composer}.csv')
         df.to_csv(filename, index=False)
 
-        download_midi(df, midi_dir)
+        if download_midi:
+            midi_dir = os.path.join(MIDI_DIR, composer)
 
-    # Crawl MIDI for Scarlatti
+            if os.path.exists(midi_dir):
+                print(f"{midi_dir} already exists.")
+            else:
+                os.makedirs(midi_dir)
+            fetch_midi(df, midi_dir)
+
+    # Get metadata for Mozart, Beethoven, Haydn
     url = 'https://kern.humdrum.org/cgi-bin/browse?l=users/craig/classical/scarlatti/longo'
     df = crawl_scarlatti(url)
     filename = os.path.join(INFO_DIR, 'scarlatti.csv')
     df.to_csv(filename, index=False)
 
-    download_midi(df, midi_dir)
+    if download_midi:
+        fetch_midi(df, midi_dir)
 
     return
 
 
 if __name__ == '__main__':
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--download_midi", dest="download_midi", default="store_true",
+                        help="Download midi files.")
+    args = parser.parse_args()
+
+    main(args.download_midi)
