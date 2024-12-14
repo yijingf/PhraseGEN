@@ -4,7 +4,12 @@ from music21 import pitch
 
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(os.path.dirname(curr_dir))
+
 DATA_DIR = os.path.join(root_dir, "sonata-dataset")
+EVENT_DIR = os.path.join(DATA_DIR, "event")
+MIDI_DIR = os.path.join(DATA_DIR, "midi")
+AUDIO_DIR = os.path.join(DATA_DIR, "audio")
+UNROLL_EVENT_DIR = os.path.join(DATA_DIR, "unrolled_event")
 
 # Build key transpose mapping
 # C#4 to G4 -> C4; G#3 to B3 -> C4

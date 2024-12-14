@@ -50,7 +50,7 @@ python3 make_dataset.py --split_ratio 0.8 --seq_len 512 --pad_bar
     * Perform [automatic phrase segmentation](https://github.com/yijingf/Phrase-Segmentation). Clone the repository in another directory. Make sure to move and rename all the rendered midi files to `path/to/phrase/segmentation/repo/data/midi` and index mapping .json files to `path/to/phrase/segmentation/repo/data/info`. Follow the steps to train and obtain phrase boundary predictions in time domain. Redirect the phrase boundary predictions to `./boundary_predictions`.
     * Convert phrase boundary markers in time to measure/beat representation and get the token sequences for these phrases. 
         ```
-        python3 get_phrases.py # Todo
+        python3 get_phrase.py # Todo
         ```
     * Make fintune dataset following the same train/validation split configuration.
         ```

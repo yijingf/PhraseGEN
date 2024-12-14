@@ -8,7 +8,31 @@ from music21 import pitch
 from fractions import Fraction
 
 # Constants
-from kern_utils.constants import PITCH_OFFSET_DICT, TEMPO_BIN
+from utils.constants import PITCH_OFFSET_DICT, TEMPO_BIN
+
+
+def pm_pitch_transpose(pm, pitch_shift, inplace=True):
+    """Pitch transpose by `pitch_shift` in chromatic scale.
+
+    Args:
+        pm (PrettyMIDI): Original PrettyMIDI object.
+        pitch_shift (int): Pitch shift in in chromatic scale.
+        inplace (bool, optional): Perform pitch transpose in place or make a copy of the Original. Defaults to True.
+
+    Returns:
+        The pitch transposed PrettyMIDI object.
+    """
+    pitch_shift = int(pitch_shift)
+
+    if not inplace:
+        new_pm = deepcopy(pm)
+    else:
+        new_pm = pm
+
+    for inst in new_pm.instruments:
+        for note in inst.notes:
+            note.pitch += pitch_shift
+    return new_pm
 
 
 def token2v(token):
@@ -173,18 +197,3 @@ def trim_event(measures, start=(0, 0), end=(0, 0)):
         else:
             seg_measures[i_st]['event'] = []
     return seg_measures
-
-
-def get_t_bar(time_signature, tempo, **kwargs):
-    """Get bar duration in seconds
-
-    Args:
-        time_signature (str): time signature, i.e. "4/4".
-        tempo (str): tempo
-    """
-    normalized_tempo = int(tempo / 12) * 12  # To avoid weird ticks
-    if len(time_signature.split('/')) > 2:
-        time_signature = Fraction(
-            time_signature[:-2]) / int(time_signature[-1])
-    t_bar = Fraction(time_signature) * 4 * 60 / normalized_tempo
-    return t_bar
