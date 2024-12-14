@@ -19,11 +19,11 @@ from fractions import Fraction
 
 import sys
 sys.path.append("../src")
-from kern_utils.event import concat_event, remove_repeat, get_sub_sect_event
-from kern_utils.common import load_event, normalize_ts_tp, normalize_event, token2v
+from utils.event import concat_event, remove_repeat, get_sub_sect_event
+from utils.common import load_event, normalize_ts_tp, normalize_event, token2v
 
 # Constants
-from kern_utils.constants import DATA_DIR
+from utils.constants import DATA_DIR
 
 
 def merge_section_name(pattern):

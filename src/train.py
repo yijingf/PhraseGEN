@@ -81,7 +81,7 @@ def main(train_path, eval_path,
     # Load Dataset
     if src_data_type == 'krn':
 
-        from kern_utils.tokenizer import BertTokenizer
+        from utils.tokenizer import BertTokenizer
 
         with open(base_vocab_file) as f:
             base_vocab = f.read().splitlines()

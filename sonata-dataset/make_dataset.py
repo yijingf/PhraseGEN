@@ -30,12 +30,12 @@ from collections import Counter
 
 import sys
 sys.path.append("../src")
-from kern_utils.common import token2v
-from kern_utils.tokenizer import BertTokenizer
-from kern_utils.event import concat_measure, mask_measure_to_idx
+from utils.common import token2v
+from utils.tokenizer import BertTokenizer
+from utils.event import concat_measure, mask_measure_to_idx
 
 # Constants
-from kern_utils.constants import DATA_DIR
+from utils.constants import DATA_DIR
 
 
 def validate_phrase(phrase):

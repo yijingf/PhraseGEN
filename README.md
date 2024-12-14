@@ -1,26 +1,25 @@
-# Generation
+# PhraseGEN: Phrase-Level Symbolic Music Generation
 
+This is the code repository for our paper [Phrase-Level Symbolic Music Generation](https://aimc2024.pubpub.org/pub/2e7q3cpr).
+
+## Dataset
+You may download the digital scores in **kern** format and prepare the **Sonata Dataset** used in the paper, or prepare your own dataset.
+
+### Prepare the Sonata Dataset
+1. Download the musical scores in the Humdrum **kern data format. See `./sonata-dataset/README.md` for more details on the classical piano sonata collected in this dataset. 
+2. Run the preprocess pipeline.
+3. Optional: prepare musical phrases for fine-tuning.
+
+### Prepare Your Own Dataset
 Musical phrases generation.
 * Phrase segmentation. `./src/segment.py`
 * MIDI tokenization and prepare the dataset. `./src/preprocess.py`
-* Fine-tune GPT-2 for musical phrases generation. `./src/train.py`
 
-## Performance
-|    Model    | Pretrained GPT-2 | PerceiverAR | Transformer w/ Global RPE | Transformer w/ Local RPE |
-|:-----------:|:----------------:|:-----------:|:-------------------------:|:------------------------:|
-| Max Seq Len |        600       |       1024      |                           |                          600|
-|   # Layer   |        12        |      12       |                           |          18                |
-|    # Head   |        12        |     16        |                           |           12               |
-|  Train Loss |         2.03         |             |                           |                          |
-|  Eval Loss  |                  |             |                           |                          |
+## Inference
 
 
-## Todo
-- [] Evaluation metrics
+## Training
 
-
-## Name
-Choose a self-explaining name for your project.
 
 ## Description
 Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
@@ -56,5 +55,18 @@ Show your appreciation to those who have contributed to the project.
 ## License
 For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## Citation
+If you find this repo useful, please cite our paper.
+
+```
+@article{Feng2024Phrase,
+	author = {Feng, Yijing and Sahin, Egemen and Casey, Michael A.},
+	journal = {AIMC 2024 (09/09 - 11/09 )},
+	year = {2024},
+	month = {aug 29},
+	note = {https://aimc2024.pubpub.org/pub/2e7q3cpr},
+	publisher = {},
+	title = {Phrase-{Level} {Symbolic} {Music} {Generation}},
+}
+```
+

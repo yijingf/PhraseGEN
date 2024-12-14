@@ -39,7 +39,7 @@ from music21 import key, stream, pitch
 # Constants
 import sys
 sys.path.append("../src")
-from kern_utils.constants import DATA_DIR
+from utils.constants import DATA_DIR
 
 
 def is_kern_note(entry):

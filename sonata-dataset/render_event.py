@@ -16,11 +16,11 @@ import scipy.io.wavfile
 
 import sys
 sys.path.append("../src")
-from kern_utils.common import load_event
-from kern_utils.event import unroll_score, event_to_pm
+from utils.common import load_event
+from utils.event import unroll_score, event_to_pm
 
 # Constant
-from kern_utils.constants import DATA_DIR
+from utils.constants import DATA_DIR
 
 EVENT_DIR = os.path.join(DATA_DIR, "event")
 MIDI_DIR = os.path.join(DATA_DIR, "midi")
