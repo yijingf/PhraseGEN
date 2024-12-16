@@ -21,41 +21,8 @@ To avoid the error occurred when parsing .krn file using music21, we manually cl
 3. Incorrect repeating patterns;
 4. Incomplete measures in the first ending brackets (music21 estimates `measure.number` based on bar line markers and beat cound at downbeat, i.e. `meausre.offset`, thus measure segmentation can be faulty if there are incomplete measures in the score.)
 
-## Data Parsing
-.krn files are first parsed using [music21](https://pypi.org/project/music21/). Although music21 can parse .krn files directly, it has more unknown errors when loading .krn files than music .xml files. Therefore, converting .krn to .xml is optional but recommended.
-
-1. Convert .krn files to .mxml files using `hum2xml` from `humextra` tool. See humextra [github repository](https://github.com/humdrum-tools/humextra) for more details on downloading, compiling and installing. Make sure `humextra` is in the `[root]/sonata-dataset` directory. The outputs will be redirect to `./mxml`.
-```
-# process all .krn files
-bash krn2xml.sh ./krn
-```
-2. Tokenization. Extract notes (grouped by measures), tempo, time signature from kern file. The outputs will be redirect to `./event`.
-```
-python3 parse_scores.py
-```
-3. Sliding window segmentation. This script segments the movements into 8 measures segments with a hop size of 2 measures, normalize time signature and tempo, and transpose pitches to C major/minor. The outputs will be redirect to `./segment`.
-```
-python3 segment.py --len_phrase 8 --hop_size 2
-```
-4. Make masked, bar-level padded dataset for training PhraseGEN model. The dataset and split config will be redirected to `./dataset`; the vocabluary will be redirected to `./vocab/base_vocab.txt`. 
-```
-# split train/validation dataset by 0.8/0.2, generate bar-level padded sequence with a maximum length of 512
-python3 make_dataset.py --split_ratio 0.8 --seq_len 512 --pad_bar
-```
-5. Phrase segmentation. This step outputs "real" phrases as a result of auto segmentation for finetuning the model. 
-    * Unroll repeats in score for rendering midi files.
-    ```
-    python3 render_event.py --repeat_mode "no_repeat"
-    ```
-    * Perform [automatic phrase segmentation](https://github.com/yijingf/Phrase-Segmentation). Clone the repository in another directory. Make sure to move and rename all the rendered midi files to `path/to/phrase/segmentation/repo/data/midi` and index mapping .json files to `path/to/phrase/segmentation/repo/data/info`. Follow the steps to train and obtain phrase boundary predictions in time domain. Redirect the phrase boundary predictions to `./boundary_predictions`.
-    * Convert phrase boundary markers in time to measure/beat representation and get the token sequences for these phrases. 
-        ```
-        python3 get_phrase.py # Todo
-        ```
-    * Make fintune dataset following the same train/validation split configuration.
-        ```
-        python3 make_dataset.py --phrase # Todo
-        ```
+## Data Preprocess
+See [documentation](../src/preprocess/README.md) for more details.
 
 ## Folder Structure
 ```
