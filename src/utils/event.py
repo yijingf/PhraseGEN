@@ -94,8 +94,8 @@ def remove_repeat(pattern):
     return new_pattern
 
 
-def concat_measure(phrase, add_eos=True, eos_token='eos',
-                   bar_eos_token='sep', pad_bar=True, max_measure_len=64):
+def flatten_measures(phrase, add_eos=True, eos_token='eos',
+                     bar_pad_token='sep', pad_bar=True, max_measure_len=64):
 
     tokens = [phrase['time_signature'], phrase['tempo']]
 
@@ -110,7 +110,7 @@ def concat_measure(phrase, add_eos=True, eos_token='eos',
 
             pad_len = max_measure_len - len(notes)
             if len(notes) < max_measure_len:
-                notes += [bar_eos_token for _ in range(pad_len)]
+                notes += [bar_pad_token for _ in range(pad_len)]
 
             tokens += notes
             tokens += ['bar']
@@ -138,7 +138,7 @@ def concat_measure(phrase, add_eos=True, eos_token='eos',
     return tokens, idx
 
 
-def mask_measure_to_idx(bar_idx, mask_measure):
+def map_measure_to_token(bar_idx, mask_measure):
     """_summary_
 
     Args:

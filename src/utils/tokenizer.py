@@ -147,7 +147,7 @@ class MTTokenizer(BaseTokenizer):
         token_ids = self.postprocess(token_ids)
         tokens = self.convert_ids_to_tokens(token_ids)
 
-        pm = decode_token_to_pm(tokens, bar_eos_token=None)
+        pm = decode_token_to_pm(tokens, bar_pad_token=None)
 
         return pm
 
@@ -168,13 +168,13 @@ class BertTokenizer(BaseTokenizer):
 
         return
 
-    def decode(self, token_ids, bar_eos_token=None):
+    def decode(self, token_ids, bar_pad_token=None):
 
         token_ids = self.postprocess(token_ids)
         tokens = self.convert_ids_to_tokens(token_ids)
 
-        if not bar_eos_token:
-            bar_eos_token = self.sep_token
-        pm = decode_token_to_pm(tokens, bar_eos_token)
+        if not bar_pad_token:
+            bar_pad_token = self.sep_token
+        pm = decode_token_to_pm(tokens, bar_pad_token)
 
         return pm

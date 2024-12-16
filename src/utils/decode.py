@@ -48,7 +48,7 @@ def decode_ts_tp(tokens):
     return ts, tp
 
 
-def decode_token_to_event(tokens, bar_eos_token='sep'):
+def decode_token_to_event(tokens, bar_pad_token='sep'):
     ts, tp = decode_ts_tp(tokens)
     ts_num, _ = ts
 
@@ -84,7 +84,7 @@ def decode_token_to_event(tokens, bar_eos_token='sep'):
         if not decode_flag:
             continue
 
-        if token == bar_eos_token:
+        if token == bar_pad_token:
             decode_flag = False
             continue
 
@@ -107,9 +107,9 @@ def decode_token_to_event(tokens, bar_eos_token='sep'):
     return ts, tp, events
 
 
-def decode_token_to_pm(tokens, bar_eos_token='sep', bar_limit=False, t_offset=0):
+def decode_token_to_pm(tokens, bar_pad_token='sep', bar_limit=False, t_offset=0):
 
-    ts, tp, events = decode_token_to_event(tokens, bar_eos_token)
+    ts, tp, events = decode_token_to_event(tokens, bar_pad_token)
 
     if ts is None:
         warnings.warn(f"No time signature. Set to {DEFAULT_TIME_SIGNATURE}")

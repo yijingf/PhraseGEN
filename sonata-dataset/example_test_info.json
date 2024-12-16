@@ -1,0 +1,233 @@
+{
+    "01": {
+        "event_file": "mozart/sonata09-3-1.json",
+        "start": {
+            "measure": 0,
+            "pos": "3/2"
+        },
+        "end": {
+            "measure": 8,
+            "pos": "3/2"
+        }
+    },
+    "02": {
+        "event_file": "mozart/sonata09-3-1.json",
+        "start": {
+            "measure": 48,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 55,
+            "pos": "3"
+        }
+    },
+    "03": {
+        "event_file": "haydn/sonata61-1.json",
+        "start": {
+            "measure": 11,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 18,
+            "pos": "4"
+        }
+    },
+    "04": {
+        "event_file": "haydn/sonata34-1.json",
+        "start": {
+            "measure": 12,
+            "pos": "3/2"
+        },
+        "end": {
+            "measure": 20,
+            "pos": "3/2"
+        }
+    },
+    "05": {
+        "event_file": "beethoven/sonata11-1.json",
+        "start": {
+            "measure": 4,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 11,
+            "pos": "3"
+        }
+    },
+    "06": {
+        "event_file": "beethoven/sonata09-1.json",
+        "start": {
+            "measure": 5,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 12,
+            "pos": "4"
+        }
+    },
+    "07": {
+        "event_file": "scarlatti/L127K348.json",
+        "start": {
+            "measure": 36,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 43,
+            "pos": "3"
+        }
+    },
+    "08": {
+        "event_file": "scarlatti/L166K085.json",
+        "start": {
+            "measure": 16,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 23,
+            "pos": "4"
+        }
+    },
+    "09": {
+        "event_file": "mozart/sonata02-1.json",
+        "start": {
+            "measure": 1,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 8,
+            "pos": "3"
+        }
+    },
+    "10": {
+        "event_file": "mozart/sonata15-3.json",
+        "start": {
+            "measure": 8,
+            "pos": "1"
+        },
+        "end": {
+            "measure": 16,
+            "pos": "1"
+        }
+    },
+    "11": {
+        "event_file": "mozart/sonata07-1.json",
+        "start": {
+            "measure": 15,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 22,
+            "pos": "4"
+        }
+    },
+    "12": {
+        "event_file": "mozart/sonata15-2.json",
+        "start": {
+            "measure": 40,
+            "pos": "1"
+        },
+        "end": {
+            "measure": 48,
+            "pos": "1"
+        }
+    },
+    "13": {
+        "event_file": "beethoven/sonata26-1.json",
+        "start": {
+            "measure": 21,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 28,
+            "pos": "4"
+        }
+    },
+    "14": {
+        "event_file": "beethoven/sonata26-3.json",
+        "start": {
+            "measure": 33,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 40,
+            "pos": "3"
+        }
+    },
+    "15": {
+        "event_file": "beethoven/sonata18-3.json",
+        "start": {
+            "measure": 0,
+            "pos": "2"
+        },
+        "end": {
+            "measure": 8,
+            "pos": "2"
+        }
+    },
+    "16": {
+        "event_file": "beethoven/sonata24-2-0.json",
+        "start": {
+            "measure": 57,
+            "pos": "1/2"
+        },
+        "end": {
+            "measure": 65,
+            "pos": "1/2"
+        }
+    },
+    "17": {
+        "event_file": "beethoven/sonata07-4.json",
+        "start": {
+            "measure": 73,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 80,
+            "pos": "4"
+        }
+    },
+    "18": {
+        "event_file": "scarlatti/L306K345.json",
+        "start": {
+            "measure": 14,
+            "pos": "2"
+        },
+        "end": {
+            "measure": 22,
+            "pos": "2"
+        }
+    },
+    "19": {
+        "event_file": "scarlatti/L348K244.json",
+        "start": {
+            "measure": 15,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 22,
+            "pos": "3/2"
+        }
+    },
+    "20": {
+        "event_file": "scarlatti/L350K498.json",
+        "start": {
+            "measure": 40,
+            "pos": "0"
+        },
+        "end": {
+            "measure": 47,
+            "pos": "3"
+        }
+    },
+    "21": {
+        "event_file": "beethoven/sonata24-2-0.json",
+        "start": {
+            "measure": 74,
+            "pos": "3/2"
+        },
+        "end": {
+            "measure": 82,
+            "pos": "3/2"
+        }
+    }
+}

@@ -32,7 +32,7 @@ import sys
 sys.path.append("..")
 from utils.common import token2v
 from utils.tokenizer import BertTokenizer
-from utils.event import concat_measure, mask_measure_to_idx
+from utils.event import flatten_measures, map_measure_to_token
 
 # Constants
 from utils.constants import DATA_DIR
@@ -111,7 +111,7 @@ def mask_rand_measure(bar_idx, mask_ratio=0.5):
     mask_measure = random.sample(range(n_measure), n_masked_meaure)
     mask_measure = np.array(sorted(mask_measure))
 
-    mask_idx = mask_measure_to_idx(bar_idx, mask_measure)
+    mask_idx = map_measure_to_token(bar_idx, mask_measure)
     return mask_idx
 
 
@@ -126,7 +126,7 @@ def mask_center_measure(bar_idx):
     n_mask = int(n_measure / 2)
     mask_st_i = round(n_measure / 2 / 2)
     mask_measure = np.arange(mask_st_i, mask_st_i + n_mask)
-    mask_idx = mask_measure_to_idx(bar_idx, mask_measure)
+    mask_idx = map_measure_to_token(bar_idx, mask_measure)
 
     return mask_idx
 
@@ -147,10 +147,10 @@ def make_masked_dataset(tokenizer, df, data_dir, split,
             if len(phrase['note']) < 2:
                 continue
 
-            tokens, bar_idx = concat_measure(phrase,
-                                             eos_token=tokenizer.eos_token,
-                                             pad_bar=pad_bar,
-                                             bar_eos_token=tokenizer.sep_token)
+            tokens, bar_idx = flatten_measures(phrase,
+                                               eos_token=tokenizer.eos_token,
+                                               pad_bar=pad_bar,
+                                               bar_sep_token=tokenizer.sep_token)
 
             if len(tokens) >= seq_len:  # roberta pos id starts from 1
                 continue
