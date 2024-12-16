@@ -1,5 +1,5 @@
 import json
-from kern_utils.decode import decode_token_to_pm
+from utils.decode import decode_token_to_pm
 
 
 class BaseTokenizer():

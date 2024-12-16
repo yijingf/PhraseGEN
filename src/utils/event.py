@@ -33,39 +33,55 @@ def no_repeat_pattern(pattern):
     return norep_pattern
 
 
-def unroll_score(event, struct, repeat_mode="volta_only"):
-    """Unroll repeats according to the section pattern in event_file.
+def expand_score(score_event, struct, repeat_mode="no_repeat"):
+    """Unfold repeats from scores given pattern notation from .krn file.
+
     Example: 
-    pattern = ['A', 'A1, 'A', 'A2', 'B', 'B'], returns 
-    1. ['A', 'A1', 'A', 'A2', 'B'] when repeat_mode="volta_only"
-    2. ['A', 'A1', 'A', 'A2', 'B', 'B'] when repeat_mode = "full"
-    3. ['A', 'A1', 'B'] when repeat = "no_repeat
+    Given the pattern ["A", "A1, "A", "A2", "B", "B"], the unfolded scores will be
+    1. ["A", "A1", "A", "A2", "B"] when repeat_mode = "volta_only"
+    2. ["A", "A1", "A", "A2", "B", "B"] when repeat_mode = "full"
+    3. ["A", "A2", "B"] when repeat = "no_repeat
 
     Args:
-        event_file (str): Path to event file.
-        repeat mode (str, optional): `volta_only`, `no_repeat` or `full`. See examples. Defaults to `volta_only`.
+        score_event (dict): see example
+
+        ```
+            {0:
+                {"event": ["o-0", "C4", "d-1"], 
+                 "time_signature": "3/4",
+                 "tempo": 120, 
+                 "key": "C major"}
+            }
+        ```
+        struct (dict): structure notation on score, e.g.
+        ```
+            {"pattern": ["A"],
+             "A": {"idx": 0, "onset": "o-0"}}}
+        ```
+        repeat mode (str, optional): `volta_only`, `no_repeat` or `full`. Defaults to `volta_only`.
+
+    Returns:
+        event (dict): unfolded score in the same form as "score_event". The measure index always starts from 0.
+        idx_mapping (dict): A mapping between measure index of unfolded event and the score event. 
     """
 
     # Sort sections
-    onsets = sorted([(i, v) for i, v in struct['attr'].items()],
-                    key=lambda x: (x[1]['idx'], x[1]['onset']))
-    sub_sect_event = get_sub_sect_event(event, onsets)
+    onsets = sorted([(i, v) for i, v in struct["attr"].items()],
+                    key=lambda x: (x[1]["idx"], x[1]["onset"]))
+    sub_sect_event = get_sub_sect_event(score_event, onsets)
 
     if repeat_mode == "no_repeat":
-        sects = no_repeat_pattern(struct['pattern'])
+        sects = no_repeat_pattern(struct["pattern"])
     elif repeat_mode == "volta_only":
-        # Unroll repeats only if there is a volta.
-        sects = remove_repeat(struct['pattern'])
+        # Unfold repeats only if there is a volta.
+        sects = remove_repeat(struct["pattern"])
     elif repeat_mode == "full":
-        sects = struct['pattern']
+        sects = struct["pattern"]
     else:
-        raise ValueError(
-            "Please set `repeat_mode` to 'volta_only', 'no_repeat' or 'full'.")
+        raise ValueError("Set repeat_mode to 'volta_only', 'no_repeat' or 'full'.")
 
-    unrolled_event, idx_mapping = concat_event(sub_sect_event,
-                                               sects,
-                                               struct['attr'])
-    return unrolled_event, idx_mapping
+    event, idx_mapping = concat_event(sub_sect_event, sects, struct["attr"])
+    return event, idx_mapping
 
 
 def remove_repeat(pattern):
